@@ -1,0 +1,863 @@
+---
+title: "GATS-3 Main Survey"
+format: 
+    dashboard:
+      logo: images/iips_logo_1.jpg
+      logo-alt: IIPS Official Logo
+      orientation: rows
+      scrolling: false
+      theme: lumen
+fig-width: 8
+fig-asp: 0.3
+editor: visual
+---
+
+```{r}
+#| label: load-packages
+#| echo: false
+#| output: false
+
+# Loading the required packages
+easypackages::libraries(
+    # Data i/o
+    "here",                 # relative file path
+    "rio",                  # file import-export
+    
+    # Data manipulation
+    "janitor",              # data cleaning fns
+    "haven",                # stata, sas, spss data io
+    "labelled",             # var labelling
+    "readxl",               # input excel sheets
+    "writexl",              # output excel sheets
+    "skimr",                # quick data summary
+    "broom",                # view model results
+    
+    # Data analysis
+    # "DHS.rates",            # demographic rates for dhs-like surveys
+    # "GeneralOaxaca",        # BO decomposition for non-linear
+    "survey",               # apply survey weights
+    
+    # Analysis output
+    "gt",                   # Publication-ready HTML Tables
+    "gtExtras",             # Helper functions for gt pkg
+    "gtsummary",            # output summary tables
+    "flextable",            # creating tables from objects
+    "officer",              # editing in office docs
+    "DT",
+    
+    # R graph related packages
+    "ggstats",
+    "RColorBrewer",
+    # "scales",               # to change formats and units
+    "patchwork",
+    
+    # Misc packages
+    "tidyverse",            # Data manipulation iron man
+    "tictoc"                # Code timing
+)
+
+```
+
+```{r}
+#| label: turn-off-scientific-notation
+#| echo: false
+#| output: false
+
+options(scipen = 999)
+
+```
+
+```{r}
+#| label: set-gtsummary-default
+#| echo: false
+#| output: false 
+
+theme_gtsummary_printer(print_engine = "flextable")
+
+```
+
+```{r}
+#| label: set-flextable-default
+#| echo: false
+#| output: false 
+
+set_flextable_defaults(
+  font.size = 10,
+  text.align = "left",
+  big.mark = "",
+  background.color = "white",
+  table.layout = "autofit",
+  theme_fun = theme_vanilla
+)
+
+```
+
+```{r}
+#| label: set-global-plot-theme
+#| include: false
+
+# Define High Visibility Theme
+theme_gats_dashboard <- function() {
+  theme_minimal(base_size = 12) +
+    theme(
+      panel.grid.minor = element_blank(),
+      # Remove vertical lines for vertical bars
+      panel.grid.major.x = element_blank(), 
+      axis.text.x = element_text(face = "bold", colour = "grey10"),
+      # Hide Y axis as we use labels on bars
+      axis.text.y = element_blank(),         
+      plot.title = element_text(face = "bold", size = rel(1.1)),
+      plot.background = element_rect(fill = "white", colour = NA)
+    )
+}
+
+# Apply globally
+theme_set(theme_gats_dashboard())
+
+```
+
+```{r}
+#| label: data-import
+#| include: false
+
+# We import the Flatfile for Jammu & Kashmir
+data_ex_00 <- read_csv(here("data_tablet_it", "gats3_flatfile_hp_260219.csv"))
+
+```
+
+```{r}
+#| label: data-prep
+#| include: false
+
+# Here we prepare the dataset by mutating custom variables needed for 
+# preparing the Dashboard.
+data_ex_01 <- data_ex_00 |> 
+    # Constant
+    mutate(cons = 1) |> 
+    
+    # Overall Progress Check - Based on Status Code
+    # Prepare the binary variable for Progress Calculation
+    # Here we set missing as "0" for progress calculation
+    mutate(progress_hh_01 = if_else(
+        HHCurrentEvent == 200 & IQCurrentEvent == 400,
+        1, 0, missing = 0
+    )) |> 
+        
+    # Overall Progress Check - Based on Consent
+    mutate(consent_part = if_else(CONSENT6 == 1, 1, 0, missing = 0)) |> 
+    mutate(consent_part_fct = factor(
+        consent_part, 
+        levels = c(0, 1),
+        labels = c("Remaining", "Completed")
+    )) |> 
+    
+    # Age Distribution [5-year age groups]
+    mutate(age5c = case_when(
+        RSAGE < 15 ~ "14 & Below",
+        RSAGE >=15 & RSAGE <=19 ~ "15-19",
+        RSAGE >=20 & RSAGE <=24 ~ "20-24",
+        RSAGE >=25 & RSAGE <=29 ~ "25-29",
+        RSAGE >=30 & RSAGE <=34 ~ "30-34",
+        RSAGE >=35 & RSAGE <=39 ~ "35-39",
+        RSAGE >=40 & RSAGE <=44 ~ "40-44",
+        RSAGE >=45 & RSAGE <=49 ~ "45-49",
+        RSAGE >=50 & RSAGE <=54 ~ "50-54",
+        RSAGE >=55 & RSAGE <=59 ~ "55-59",
+        RSAGE >=60 & RSAGE <=64 ~ "60-64",
+        RSAGE >=65 & RSAGE <=69 ~ "65-69",
+        RSAGE >=70 & RSAGE <=74 ~ "70-74",
+        RSAGE >=75 & RSAGE <=79 ~ "75-79",
+        RSAGE >= 80 ~ "80+"
+    ),
+    age5c = factor(
+        age5c,
+        levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44",
+                   "45-49", "50-54", "55-59", "60-64", "65-69", "70-74",
+                   "75-79", "80+")
+    )) |> 
+    # Gender Distribution Check
+    mutate(gender = factor(
+        A01,
+        levels = c(1, 2, 3),
+        labels = c("Male", "Female", "Other")
+    )) |> 
+    mutate(gender_fm = if_else(A01 == 1, 1, 0, missing = NA)) |> 
+    mutate(gender_fm = factor(
+        gender, 
+        levels = c(0, 1), 
+        labels = c("Female", "Male")
+    )) |> 
+    # Currently Smoke Tobacco Prevalence Check
+    mutate(curr_smoke = factor(
+        B01,
+        levels = c(1, 2, 3, -7, -9),
+        labels = c("Daily", "Less than Daily", "Not at all", 
+                   "Don't know", "Refused")
+    )) |>
+    # Currently Smokeless Tobacco Prevalence Check
+    mutate(curr_smokeless = factor(
+        C01,
+        levels = c(1, 2, 3, -7, -9),
+        labels = c("Daily", "Less than Daily", "Not at all", 
+                   "Don't know", "Refused")
+    )) |>
+    # Heard/Seen E-cigarette Check
+    mutate(seen_ecig = factor(
+        EC1,
+        levels = c(1, 2, -9),
+        labels = c("Yes", "No", "Refused")
+    )) |> 
+    # Currently Use E-cigarette Check
+    mutate(curr_ecig = factor(
+        EC2,
+        levels = c(1, 2, 3, -7, -9),
+        labels = c("Daily", "Less than Daily", "Not at all", 
+                   "Don't know", "Refused")
+    )) |> 
+    
+    # Consume Paan masala without tobacco
+    mutate(paan_wotob = factor(
+        CC1,
+        levels = c(1, 2, -9),
+        labels = c("Yes", "No", "Refused")
+    )) |> 
+    # Consume Areca nut without tobacco
+    mutate(areca_nut = factor(
+        CC5,
+        levels = c(1, 2, -9),
+        labels = c("Yes", "No", "Refused")
+    ))
+ 
+```
+
+#  {.sidebar width="220px"}
+
+### Fieldwork Monitoring Dashboard
+
+This dashboard displays statistics for `{r} data_ex_00$DATA01 |> unique()`:
+
+|                      |                                     |
+|----------------------|-------------------------------------|
+| **Num of Districts** | `{r} n_distinct(data_ex_00$DATA04)` |
+| **Num of PSUs**      | `{r} n_distinct(data_ex_00$DATA02)` |
+| **Num of HHs**       | `{r} nrow(data_ex_00)`              |
+
+------------------------------------------------------------------------
+
+```{r}
+#| label: jalab-01
+#| include: false
+# CODE
+# [![](images/iips_logo_1.jpg){width=150px}](https://www.iipsindia.ac.in/)
+
+```
+
+::: {.callout-note collapse="true"}
+### Disclaimer
+
+This Dashboard is based on Data Generated from the GSS App used for Data Collection in GATS-3 India. Dashboard is Updated based on Data Availability.
+:::
+
+------------------------------------------------------------------------
+
+*Dashboard last updated on `{r} Sys.Date()`*
+
+# 📈 Overall Progress
+
+## Row {height="20%"}
+
+```{r}
+#| label: data-for-valuebox
+#| include: false
+
+# Transform the Data Overall for Interview Progress calculation Across
+# ALL DISTRICTS
+data_progress_dist <- data_ex_01 |> 
+    # Group by Districts
+    group_by(DATA04) |> 
+    # Calculate the Total and Completed Cases across districts
+    summarize(
+        tot_hh = sum(cons),
+        n_hh = sum(progress_hh_01)
+    ) |> 
+    # Calculate Number of Districts Completed
+    mutate(progress_dist_01 = if_else(
+        tot_hh == n_hh, 
+        1, 0, missing = 0
+    )) |> 
+    # Calculate overall stats of Districts
+    summarize(
+        tot_dist = n(),
+        n_dist = sum(progress_dist_01)
+    ) |> 
+    # Calculate Percentage of Completed Districts
+    mutate(pct_dist = (n_dist / tot_dist)) |>
+    # Prepare the Progress Display Stat in N (%)
+    mutate(stat_dist = str_c(
+        n_dist, 
+        " (", 
+        scales::label_percent()(pct_dist),
+        ")"
+    ))
+
+
+# Transform the Data Overall for Interview Progress calculation Across
+# ALL PSUS
+data_progress_psu <- data_ex_01 |> 
+    # Group by PSUs
+    group_by(DATA02) |> 
+    # Calculate the Total and Completed Cases across districts
+    summarize(
+        tot_hh = sum(cons),
+        n_hh = sum(progress_hh_01)
+    ) |> 
+    # Calculate Number of PSUs Completed
+    mutate(progress_psu_01 = if_else(
+        tot_hh == n_hh, 
+        1, 0, missing = 0
+    )) |> 
+    # Calculate overall stats of PSUs
+    summarize(
+        tot_psu = n(),
+        n_psu = sum(progress_psu_01)
+    ) |> 
+    # Calculate Percentage of Completed PSUs
+    mutate(pct_psu = (n_psu / tot_psu)) |>
+    # Prepare the Progress Display Stat in N (%)
+    mutate(stat_psu = str_c(
+        n_psu, 
+        " (", 
+        scales::label_percent()(pct_psu),
+        ")"
+    ))
+
+
+# Transform the Data Overall for Interview Progress calculation Across
+# ALL HOUSEHOLDS
+data_progress_hh <- data_ex_01 |> 
+    # Calculate Total and Completed Cases
+    summarize(
+        tot_hh = sum(cons),
+        n_hh = sum(progress_hh_01)
+    ) |> 
+    # Calculate Percentage of Completed Cases
+    mutate(pct_hh = (n_hh / tot_hh)) |> 
+    # Prepare the Progress Display Stat in N (%)
+    mutate(stat_hh = str_c(
+        n_hh, 
+        " (", 
+        scales::label_percent()(pct_hh),
+        ")"
+    ))
+
+
+# Estimate the Consent refusal rate
+data_consent <- data_ex_01 |> 
+    tabyl(CONSENT6) |> 
+    filter(CONSENT6 == 2) |> 
+    mutate(
+        n_consent = str_c(
+            n, 
+            " (", 
+            scales::label_percent(accuracy = 0.1)(valid_percent),
+            ")"
+        ))
+
+
+# Districts Completed
+dist_comp <- data_progress_dist$stat_dist
+# PSUs Completed
+psu_comp <- data_progress_psu$stat_psu
+# HHs Completed
+hh_comp <- data_progress_hh$stat_hh
+# Consent Refusal Rate
+consent_ref_rate <- data_consent$n_consent
+
+```
+
+```{r}
+#| content: valuebox
+#| title: "Districts Completed" 
+
+# Look into why colour is not coming the dashboard
+list(
+  icon = "globe-central-south-asia",
+  color = "info",
+  value = dist_comp
+)
+
+```
+
+```{r}
+#| content: valuebox
+#| title: "PSUs Completed"
+
+list(
+  icon = "database-up",
+  color = "info",
+  value = psu_comp
+)
+
+```
+
+```{r}
+#| content: valuebox
+#| title: "Households Completed"
+
+list(
+  # icon = "graph-up-arrow",
+  color = "info",
+  value = hh_comp
+)
+
+```
+
+```{r}
+#| content: valuebox
+#| title: "Consent Refusal Rate"
+
+list(
+  icon = "hand-thumbs-up",
+  color = "success",
+  value = consent_ref_rate
+)
+
+# NOTE: 
+#   Display last updated date in dashboard [D].
+#   HHs Refusal Rate
+#   HHs covered each day. Using Progress bars
+  
+```
+
+## Row {height="40%"}
+
+### Column {width="70%"}
+
+```{r}
+#| label: data-age
+#| include: false
+
+# Age distribution - Basic
+# !!! Missing values will not be displayed!!!
+dt_age5c00 <- data_ex_01 |> 
+    tabyl(age5c, show_na = F) |> 
+    adorn_totals()
+dt_age5c00 
+
+# Age distribution table - For graph
+dt_age5c01 <- dt_age5c00 |> 
+    # Convert percent scale to 0-100
+    mutate(percent = percent * 100) |> 
+    rename(
+        "pct" = "percent"
+    ) |> 
+    # Remove the Row of Totals
+    slice(1:(n() - 1))
+dt_age5c01
+
+```
+
+```{r}
+#| label: gph-age
+#| title: Age Distribution of Respondents [A03]
+#| padding: 5px
+#| echo: false
+#| output: true
+
+# Age distribution Graph - Basic
+fig_age5c00 <- dt_age5c01 |> 
+    ggplot(aes(x = age5c, y = pct)) +
+    # Adding the Bars
+    geom_col(
+        # colour = "grey10",
+        fill = "steelblue", width = 0.7
+    ) +
+    # Adding the graph labels
+    geom_text(
+        aes(
+            label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"),
+        ),
+        hjust = 0,
+        vjust = 0,
+        size = 3.5,
+        fontface = "bold",
+        angle = 30
+    ) +
+    labs(
+        x = NULL,
+        y = NULL
+    ) +
+    # Expand Y limits slightly so labels don't hit the top of the box
+    scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
+    # theme_light()
+
+# Age distribution Graph - Polished
+fig_age5c01 <- fig_age5c00 +
+    theme(
+        # panel.grid = element_blank(),
+        axis.text.x = element_text(
+            face = "bold",
+            size = rel(1.4)
+        ),
+        axis.text.y = element_blank()
+    )
+fig_age5c01
+
+```
+
+### Column {width="30%"}
+
+```{r}
+#| label: data-gender
+#| echo: false
+#| output: false
+
+# Gender distribution table - Basic
+# !!! Missing values will not be displayed!!!
+dt_gender00 <- data_ex_01 |> 
+    tabyl(gender, show_na = F) |> 
+    adorn_totals()
+dt_gender00 
+
+# Gender distribution table - For graph
+dt_gender01 <- dt_gender00 |> 
+    # Convert percent scale to 0-100
+    mutate(percent = percent * 100) |> 
+    rename(
+        "pct" = "percent"
+    ) |> 
+    # Remove the Row of Totals
+    slice(1:(n() - 1))
+dt_gender01
+
+```
+
+```{r}
+#| label: gph-gender
+#| title: Gender Distribution of Respondents [A01]
+#| padding: 5px
+#| echo: false
+#| output: true
+
+# Gender distribution Graph - Basic
+fig_gender00 <- dt_gender01 |> 
+    ggplot(aes(x = gender, y = pct)) +
+    geom_col(
+        # colour = "grey10",
+        fill = "navy", width = 0.7
+    ) +
+    geom_text(
+        aes(
+            label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"),
+        ),
+        vjust = -0.5,
+        size = 3.5,
+        fontface = "bold"
+    ) +
+    labs(
+        x = NULL,
+        y = NULL
+    ) +
+    # Expand Y limits slightly so labels don't hit the top of the box
+    scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
+    # theme_light()
+
+# Gender distribution Graph - Polished
+fig_gender01 <- fig_gender00 +
+    theme(
+        # panel.grid = element_blank(),
+        axis.text.x = element_text(
+            face = "bold",
+            size = rel(1.4)
+        ),
+        axis.text.y = element_blank()
+    )
+fig_gender01
+
+```
+
+## Row {height="40%"}
+
+### Column {.tabset}
+
+```{r}
+#| label: data-curr-smoke
+#| echo: false
+#| output: false
+
+# Currently smoke tobacco table - Basic
+# !!! Missing values will not be displayed!!!
+dt_curr_smoke00 <- data_ex_01 |> 
+    tabyl(curr_smoke, show_na = F) |> 
+    adorn_totals()
+dt_curr_smoke00 
+
+# Currently smoke tobacco table - For graph
+dt_curr_smoke01 <- dt_curr_smoke00 |> 
+    # Convert percent scale to 0-100
+    mutate(percent = percent * 100) |> 
+    rename(
+        "pct" = "percent"
+    ) |> 
+    # Remove the Row of Totals
+    slice(1:(n() - 1))
+dt_curr_smoke01
+
+```
+
+```{r}
+#| label: gph-curr-smoke
+#| title: Currently Smoked Tobacco [B01]
+#| echo: false
+#| output: true
+
+# Currently smoke tobacco Graph - Basic
+fig_curr_smoke00 <- dt_curr_smoke01 |> 
+    ggplot(aes(x = pct, y = curr_smoke |> fct_rev())) +
+    geom_col(
+        # colour = "grey10",
+        fill = "gold2"
+    ) +
+    geom_text(
+        aes(x = 15, 
+            label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"))
+    ) +
+    labs(
+        x = NULL,
+        y = NULL
+    ) +
+    theme_light()
+
+# Currently smoke tobacco Graph - Polished
+fig_curr_smoke01 <- fig_curr_smoke00 +
+    xlim(0, 100) +
+    theme(
+        # panel.grid = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(
+            face = "bold",
+            size = rel(1.2)
+        )
+    )
+fig_curr_smoke01
+
+```
+
+```{r}
+#| label: data-curr-smokeless
+#| echo: false
+#| output: false
+
+# Currently smokeless tobacco table - Basic
+# !!! Missing values will not be displayed!!!
+dt_curr_smokeless00 <- data_ex_01 |> 
+    tabyl(curr_smokeless, show_na = F) |> 
+    adorn_totals()
+dt_curr_smokeless00 
+
+# Currently smokeless tobacco table - For graph
+dt_curr_smokeless01 <- dt_curr_smokeless00 |> 
+    # Convert percent scale to 0-100
+    mutate(percent = percent * 100) |> 
+    rename(
+        "pct" = "percent"
+    ) |> 
+    # Remove the Row of Totals
+    slice(1:(n() - 1))
+dt_curr_smokeless01
+
+```
+
+```{r}
+#| label: gph-curr-smokeless
+#| title: Currently Use Smokeless Tobacco [C01]
+#| echo: false
+#| output: true
+
+# Currently smokeless tobacco Graph - Basic
+fig_curr_smokeless00 <- dt_curr_smokeless01 |> 
+    ggplot(aes(x = pct, y = curr_smokeless |> fct_rev())) +
+    geom_col(
+        # colour = "grey10",
+        fill = "gold2"
+    ) +
+    geom_text(
+        aes(x = 15, 
+            label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"))
+    ) +
+    labs(
+        x = NULL,
+        y = NULL
+    ) +
+    theme_light()
+
+# Currently smokeless tobacco Graph - Polished
+fig_curr_smokeless01 <- fig_curr_smokeless00 +
+    xlim(0, 100) +
+    theme(
+        # panel.grid = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(
+            face = "bold",
+            size = rel(1.2)
+        )
+    )
+fig_curr_smokeless01
+
+```
+
+### Column {.tabset}
+
+```{r}
+#| label: data-seen-ecig
+#| echo: false
+#| output: false
+
+# Seen e-cigarette table - Basic
+# !!! Missing values will not be displayed!!!
+dt_seen_ecig00 <- data_ex_01 |> 
+    tabyl(seen_ecig, show_na = F) |> 
+    adorn_totals()
+dt_seen_ecig00 
+
+# Seen e-cigarette table - For graph
+dt_seen_ecig01 <- dt_seen_ecig00 |> 
+    # Convert percent scale to 0-100
+    mutate(percent = percent * 100) |> 
+    rename(
+        "pct" = "percent"
+    ) |> 
+    # Remove the Row of Totals
+    slice(1:(n() - 1))
+dt_seen_ecig01
+
+```
+
+```{r}
+#| label: gph-seen-ecig
+#| title: Heard/Seen an E-cigarette [EC1]
+#| echo: false
+#| output: true
+
+# Seen e-cigarette Graph - Basic
+fig_seen_ecig00 <- dt_seen_ecig01 |> 
+    ggplot(aes(x = pct, y = seen_ecig |> fct_rev())) +
+    geom_col(
+        # colour = "grey10",
+        fill = "orange3"
+    ) +
+    geom_text(
+        aes(x = 15, 
+            label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"))
+    ) +
+    labs(
+        x = NULL,
+        y = NULL
+    ) +
+    theme_light()
+
+# Seen e-cigarette Graph - Polished
+fig_seen_ecig01 <- fig_seen_ecig00 +
+    xlim(0, 100) +
+    theme(
+        # panel.grid = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(
+            face = "bold",
+            size = rel(1.2)
+        )
+    )
+fig_seen_ecig01
+
+```
+
+```{r}
+#| label: data-curr-ecig
+#| echo: false
+#| output: false
+
+# Currently use e-cigarette table - Basic
+# !!! Missing values will not be displayed!!!
+dt_curr_ecig00 <- data_ex_01 |> 
+    tabyl(curr_ecig, show_na = F) |> 
+    adorn_totals()
+dt_curr_ecig00 
+
+# Currently use e-cigarette table - For graph
+dt_curr_ecig01 <- dt_curr_ecig00 |> 
+    # Convert percent scale to 0-100
+    mutate(percent = percent * 100) |> 
+    rename(
+        "pct" = "percent"
+    ) |> 
+    # Remove the Row of Totals
+    slice(1:(n() - 1))
+dt_curr_ecig01
+
+```
+
+```{r}
+#| label: gph-curr-ecig
+#| title: Currently Use E-cigarettes [EC2]
+#| echo: false
+#| output: true
+
+# Currently use e-cigarette Graph - Basic
+fig_curr_ecig00 <- dt_curr_ecig01 |> 
+    ggplot(aes(x = pct, y = curr_ecig |> fct_rev())) +
+    geom_col(
+        # colour = "grey10",
+        fill = "orange3"
+    ) +
+    geom_text(
+        aes(x = 15, 
+            label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"))
+    ) +
+    labs(
+        x = NULL,
+        y = NULL
+    ) +
+    theme_light()
+
+# Currently use e-cigarette Graph - Polished
+fig_curr_ecig01 <- fig_curr_ecig00 +
+    xlim(0, 100) +
+    theme(
+        # panel.grid = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(
+            face = "bold",
+            size = rel(1.2)
+        )
+    )
+fig_curr_ecig01
+
+```
+
+# 📊 Key Indicators
+
+## Row {height="50%"}
+
+### Column {width="50%"}
+
+### Column {width="50%"}
+
+## Row {height="50%"}
+
+### Column {width="50%"}
+
+### Column {width="50%"}
+
+# 👩‍🏫 FIID Statistics
+
+## Row {height="50%"}
+
+### Column {width="50%"}
+
+### Column {width="50%"}
+
+## Row {height="50%"}
+
+### Column {width="50%"}
+
+### Column {width="50%"}
