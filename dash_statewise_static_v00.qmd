@@ -50,6 +50,7 @@ easypackages::libraries(
     "RColorBrewer",
     # "scales",               # to change formats and units
     "patchwork",
+    "leaflet",
     
     # Misc packages
     "tidyverse",            # Data manipulation iron man
@@ -120,7 +121,7 @@ theme_set(theme_gats_dashboard())
 #| label: data-import
 #| include: false
 
-# We import the Flatfile for Jammu & Kashmir
+# We import the Flatfile for Himachal Pradesh
 data_ex_00 <- read_csv(here("data_tablet_it", "gats3_flatfile_hp_260219.csv"))
 
 ```
@@ -138,7 +139,7 @@ data_ex_01 <- data_ex_00 |>
     # Overall Progress Check - Based on Status Code
     # Prepare the binary variable for Progress Calculation
     # Here we set missing as "0" for progress calculation
-    mutate(progress_hh_01 = if_else(
+    mutate(progress_overall_01 = if_else(
         HHCurrentEvent == 200 & IQCurrentEvent == 400,
         1, 0, missing = 0
     )) |> 
@@ -260,14 +261,14 @@ This Dashboard is based on Data Generated from the GSS App used for Data Collect
 
 ------------------------------------------------------------------------
 
-*Dashboard last updated on `{r} Sys.Date()`*
+*Dashboard Updated on `{r} Sys.Date()`*
 
 # 📈 Overall Progress
 
 ## Row {height="20%"}
 
 ```{r}
-#| label: data-for-valuebox
+#| label: data-valuebox-page1
 #| include: false
 
 # Transform the Data Overall for Interview Progress calculation Across
@@ -277,26 +278,26 @@ data_progress_dist <- data_ex_01 |>
     group_by(DATA04) |> 
     # Calculate the Total and Completed Cases across districts
     summarize(
-        tot_hh = sum(cons),
-        n_hh = sum(progress_hh_01)
+        tot_hh_n = sum(cons),
+        comp_hh_n = sum(progress_overall_01)
     ) |> 
     # Calculate Number of Districts Completed
     mutate(progress_dist_01 = if_else(
-        tot_hh == n_hh, 
+        tot_hh_n == comp_hh_n, 
         1, 0, missing = 0
     )) |> 
     # Calculate overall stats of Districts
     summarize(
-        tot_dist = n(),
-        n_dist = sum(progress_dist_01)
+        tot_dist_n = n(),
+        comp_dist_n = sum(progress_dist_01)
     ) |> 
     # Calculate Percentage of Completed Districts
-    mutate(pct_dist = (n_dist / tot_dist)) |>
-    # Prepare the Progress Display Stat in N (%)
+    mutate(comp_dist_pct = (comp_dist_n / tot_dist_n)) |>
+    # Prepare the Progress Display Statistics in N (%)
     mutate(stat_dist = str_c(
-        n_dist, 
+        comp_dist_n, 
         " (", 
-        scales::label_percent()(pct_dist),
+        scales::label_percent()(comp_dist_pct),
         ")"
     ))
 
@@ -308,26 +309,26 @@ data_progress_psu <- data_ex_01 |>
     group_by(DATA02) |> 
     # Calculate the Total and Completed Cases across districts
     summarize(
-        tot_hh = sum(cons),
-        n_hh = sum(progress_hh_01)
+        tot_hh_n = sum(cons),
+        comp_hh_n = sum(progress_overall_01)
     ) |> 
     # Calculate Number of PSUs Completed
     mutate(progress_psu_01 = if_else(
-        tot_hh == n_hh, 
+        tot_hh_n == comp_hh_n, 
         1, 0, missing = 0
     )) |> 
     # Calculate overall stats of PSUs
     summarize(
-        tot_psu = n(),
-        n_psu = sum(progress_psu_01)
+        tot_psu_n = n(),
+        comp_psu_n = sum(progress_psu_01)
     ) |> 
     # Calculate Percentage of Completed PSUs
-    mutate(pct_psu = (n_psu / tot_psu)) |>
-    # Prepare the Progress Display Stat in N (%)
+    mutate(comp_psu_pct = (comp_psu_n / tot_psu_n)) |>
+    # Prepare the Progress Display Statistics in N (%)
     mutate(stat_psu = str_c(
-        n_psu, 
+        comp_psu_n, 
         " (", 
-        scales::label_percent()(pct_psu),
+        scales::label_percent()(comp_psu_pct),
         ")"
     ))
 
@@ -337,14 +338,14 @@ data_progress_psu <- data_ex_01 |>
 data_progress_hh <- data_ex_01 |> 
     # Calculate Total and Completed Cases
     summarize(
-        tot_hh = sum(cons),
-        n_hh = sum(progress_hh_01)
+        tot_hh_n = sum(cons),
+        comp_hh_n = sum(progress_overall_01)
     ) |> 
     # Calculate Percentage of Completed Cases
-    mutate(pct_hh = (n_hh / tot_hh)) |> 
-    # Prepare the Progress Display Stat in N (%)
+    mutate(pct_hh = (comp_hh_n / tot_hh_n)) |> 
+    # Prepare the Progress Display Statistics in N (%)
     mutate(stat_hh = str_c(
-        n_hh, 
+        comp_hh_n, 
         " (", 
         scales::label_percent()(pct_hh),
         ")"
@@ -365,11 +366,11 @@ data_consent <- data_ex_01 |>
 
 
 # Districts Completed
-dist_comp <- data_progress_dist$stat_dist
+comp_dist <- data_progress_dist$stat_dist
 # PSUs Completed
-psu_comp <- data_progress_psu$stat_psu
+comp_psu <- data_progress_psu$stat_psu
 # HHs Completed
-hh_comp <- data_progress_hh$stat_hh
+comp_hh <- data_progress_hh$stat_hh
 # Consent Refusal Rate
 consent_ref_rate <- data_consent$n_consent
 
@@ -383,7 +384,7 @@ consent_ref_rate <- data_consent$n_consent
 list(
   icon = "globe-central-south-asia",
   color = "info",
-  value = dist_comp
+  value = comp_dist
 )
 
 ```
@@ -395,7 +396,7 @@ list(
 list(
   icon = "database-up",
   color = "info",
-  value = psu_comp
+  value = comp_psu
 )
 
 ```
@@ -407,7 +408,7 @@ list(
 list(
   # icon = "graph-up-arrow",
   color = "info",
-  value = hh_comp
+  value = comp_hh
 )
 
 ```
@@ -427,6 +428,207 @@ list(
 #   HHs Refusal Rate
 #   HHs covered each day. Using Progress bars
   
+```
+
+## Row {height="80%"}
+
+### Column {width="50%"}
+
+```{r}
+#| label: data-gps-distribution
+#| include: false
+
+# Prepare the GPS Data
+df_ex_gps <- data_ex_01 |>
+    # Keep only the required variables
+    select(DATA02, DATA08, INTRO_PASSIVE_GPS) |> 
+    # Filter out the missing values
+    filter(!is.na(INTRO_PASSIVE_GPS)) |> 
+    # Extract Coordinate values from the GPS Variable
+    separate_wider_delim(
+        INTRO_PASSIVE_GPS, 
+        delim = " ",
+        names = c("latitude", "longitude", NA, NA)
+    ) |> 
+    # Convert the variable type to numeric
+    mutate(
+        latitude = as.numeric(latitude),
+        longitude = as.numeric(longitude)
+    )
+
+```
+
+```{r}
+#| label: map-gps-distribution
+#| title: GPS Distribution of PSUs
+#| padding: 0px
+#| echo: false
+#| output: true
+
+# Draw the Map
+leaflet(data = df_ex_gps) |> 
+    
+    # Add the default basemap
+    # addTiles() |> 
+    # Adds a clean, professional basemap (less cluttered than 
+    # default OpenStreetMap)
+    # addProviderTiles(providers$CartoDB.Positron) |>
+    # Map with Full J&K shown
+    addProviderTiles(providers$Esri.NatGeoWorldMap) |> 
+    
+    # Adds the GPS points with clustering
+    addMarkers(
+        lat = ~latitude, 
+        lng = ~longitude,
+        # This is the magic line for large datasets
+        clusterOptions = markerClusterOptions(), 
+        # Adds a clickable popup showing the consent status for that household
+        popup = ~paste("<b>Latitude:</b>", round(latitude, 2), 
+                       "<b>Longitude:</b>", round(longitude, 2))
+    )
+
+```
+
+### Column {width="50%"}
+
+```{r}
+#| label: data-dist-completion
+#| include: false
+
+# Transform the Data Overall for Interview Progress calculation Across 
+# ALL DISTRICTS
+df_tbl_progress_dist <- data_ex_01 |> 
+    # Group by Districts
+    group_by(DATA04) |> 
+    # Calculate the Total and Completed Cases across Districts
+    summarize(
+        tot_hh_n = sum(cons),
+        comp_hh_n = sum(progress_overall_01)
+    ) |> 
+    # Calculate Prop and % of HHs Completed across Districts
+    mutate(
+        prop_hh = comp_hh_n / tot_hh_n,
+        pct_hh = scales::label_percent()(prop_hh)
+    )
+
+```
+
+```{r}
+#| label: table-dist-completion
+#| title: District-wise Completion Rate
+#| padding: 5px
+#| echo: false
+#| output: true
+
+# View as gt table
+df_tbl_progress_dist |> select(-prop_hh) |> 
+    gt() |> 
+    cols_label(
+        DATA04 = "District Name",
+        tot_hh_n = "Total HHs",
+        comp_hh_n = "Completed HHs",
+        pct_hh = "Completion Rate"
+    ) |> 
+    gt_theme_espn() |> 
+    opt_interactive(
+      use_pagination = FALSE
+    )
+
+```
+
+```{r}
+#| label: data-psu-completion
+#| include: false
+
+# Transform the Data Overall for Interview Progress calculation Across 
+# ALL PSUS
+df_tbl_progress_psu <- data_ex_01 |> 
+    # Group by Districts
+    group_by(DATA02) |> 
+    # Calculate the Total and Completed Cases across Districts
+    summarize(
+        tot_hh_n = sum(cons),
+        comp_hh_n = sum(progress_overall_01)
+    ) |> 
+    # Calculate Prop and % of HHs Completed across Districts
+    mutate(
+        prop_hh = comp_hh_n / tot_hh_n,
+        pct_hh = scales::label_percent()(prop_hh)
+    )
+
+```
+
+```{r}
+#| label: table-psu-completion
+#| title: PSU-wise Completion Rate
+#| padding: 5px
+#| echo: false
+#| output: true
+
+df_tbl_progress_psu |> select(-prop_hh) |> 
+    gt() |> 
+    cols_label(
+        "DATA02" = "PSU Code",
+        "tot_hh_n" = "Total HHs", 
+        "comp_hh_n" = "Completed HHs", 
+        "pct_hh" = "Completion Rate"
+    ) |> 
+    gt_theme_espn() |> 
+    opt_interactive(
+      use_pagination = FALSE
+    )
+
+```
+
+# 📊 Key Indicators
+
+## Row {height=20%}
+
+```{r}
+#| label: data-valuebox-page2
+#| include: false
+
+prev1 <- "16.8%"
+prev2 <- "1.6%"
+prev3 <- "17.3%"
+
+```
+
+```{r}
+#| content: valuebox
+#| title: "Tobacco Prevalence" 
+
+# Look into why colour is not coming the dashboard
+list(
+  icon = "graph-up-arrow",
+  color = "info",
+  value = prev1
+)
+
+```
+
+```{r}
+#| content: valuebox
+#| title: "Smoking Prevalence"
+
+list(
+  icon = "graph-up-arrow",
+  color = "info",
+  value = prev2
+)
+
+```
+
+```{r}
+#| content: valuebox
+#| title: "Smokeless Prevalence"
+
+list(
+  icon = "graph-up-arrow",
+  color = "info",
+  value = prev3
+)
+
 ```
 
 ## Row {height="40%"}
@@ -834,21 +1036,57 @@ fig_curr_ecig01
 
 ```
 
-# 📊 Key Indicators
-
-## Row {height="50%"}
-
-### Column {width="50%"}
-
-### Column {width="50%"}
-
-## Row {height="50%"}
-
-### Column {width="50%"}
-
-### Column {width="50%"}
 
 # 👩‍🏫 FIID Statistics
+
+## Row {height=20%}
+
+```{r}
+#| label: data-valuebox-page3
+#| include: false
+
+hrr <- "92.6%"
+irr <- "90.9%"
+trr <- "84.3%"
+
+```
+
+```{r}
+#| content: valuebox
+#| title: "Household Response Rate" 
+
+# Look into why colour is not coming the dashboard
+list(
+  icon = "graph-up-arrow",
+  color = "info",
+  value = hrr
+)
+
+```
+
+```{r}
+#| content: valuebox
+#| title: "Individual Response Rate"
+
+list(
+  icon = "graph-up-arrow",
+  color = "info",
+  value = irr
+)
+
+```
+
+```{r}
+#| content: valuebox
+#| title: "Total Response Rate"
+
+list(
+  icon = "graph-up-arrow",
+  color = "info",
+  value = trr
+)
+
+```
 
 ## Row {height="50%"}
 
