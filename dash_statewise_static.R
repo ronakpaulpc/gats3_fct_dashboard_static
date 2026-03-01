@@ -1211,7 +1211,6 @@ data_ex_01 |>
     gt()
 
 
-
 # ** IND Survey Code by FIID ----------------------------------------------
 # Crosstab using gtsummary
 data_ex_01 |> 

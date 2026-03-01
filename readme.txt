@@ -27,12 +27,14 @@ It will automatically render your document, create a special gh-pages branch, an
 quarto publish gh-pages dash_statewise_static_v00.qmd
 
 
-GIT COMMANDS TO UPDATE THE DASHBOARD IN FUTURE
-git init
+GIT COMMANDS TO UPDATE QUARTO DASHBOARD VIA THE GITHUB PAGES FROM THE TERMINAL
+quarto publish gh-pages dash_statewise_static_v00.qmd
+
+GIT COMMANDS TO PUSH CHANGES TO THE DASHBOARD TO GITHUB
 git add .
-git commit -m "Initial commit for GATS-3 Static Dashboard"
-git branch -M main
-git remote add origin https://github.com/ronakpaulpc/gats3_fct_dashboard_static.git
-git push -u origin main
+git commit -m "Update Dashboard"
+git push 
+
+
 
 

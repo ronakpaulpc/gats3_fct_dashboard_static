@@ -133,6 +133,7 @@ data_ex_00 <- read_csv(here("data_tablet_it", "gats3_flatfile_hp_260219.csv"))
 # Here we prepare the dataset by mutating custom variables needed for 
 # preparing the Dashboard.
 data_ex_01 <- data_ex_00 |> 
+    
     # Constant
     mutate(cons = 1) |> 
     
@@ -142,8 +143,50 @@ data_ex_01 <- data_ex_00 |>
     mutate(progress_overall_01 = if_else(
         HHCurrentEvent == 200 & IQCurrentEvent == 400,
         1, 0, missing = 0
+    )) |>
+    
+    # Response Rate Across Overall, Household and Individual
+    # Questionnaires
+    mutate(rrate_allq_01 = if_else(
+        HHCurrentEvent == 200 & IQCurrentEvent == 400,
+        1, 0, missing = NA
+    )) |>
+    # Progress - Household Questionnaire
+    mutate(rrate_hhq_01 = if_else(
+        HHCurrentEvent == 200,
+        1, 0, missing = NA
+    )) |>
+    # Progress - Individual Questionnaire
+    mutate(rrate_indq_01 = if_else(
+        IQCurrentEvent == 400,
+        1, 0, missing = NA
+    )) |>
+    
+    # Final Survey Codes - Recode Pending Codes into Single Category
+    # Recategorize HH Questionnaire
+    mutate(final_code_hhq = if_else(
+        HHCurrentEvent < 200, 
+        "Pending", as.character(HHCurrentEvent), missing = NA
     )) |> 
-        
+    # Recategorize IND Questionnaire
+    mutate(final_code_indq = if_else(
+        IQCurrentEvent < 400,
+        "Pending", as.character(IQCurrentEvent), missing = NA
+    )) |> 
+    # Convert to Factor
+    mutate(
+        final_code_hhq = factor(
+            final_code_hhq, 
+            levels = c("200", "201", "202", "203", "204", "205", "206",
+                       "208", "209", "999", "Pending")
+        ),
+        final_code_indq = factor(
+            final_code_indq,
+            levels = c("400", "402", "403", "404", "407", "408", "409",
+                       "Pending")
+        )
+    ) |> 
+    
     # Overall Progress Check - Based on Consent
     mutate(consent_part = if_else(CONSENT6 == 1, 1, 0, missing = 0)) |> 
     mutate(consent_part_fct = factor(
@@ -231,7 +274,24 @@ data_ex_01 <- data_ex_00 |>
  
 ```
 
-#  {.sidebar width="220px"}
+```{r}
+#| label: set-var-labels
+#| include: false
+
+# Add variable labels to selected variables
+data_ex_01 <- data_ex_01 |> 
+    set_variable_labels(
+        # ID Variables
+        # FIID = "Field Investigator ID",
+        
+        # Custom Variables
+        final_code_hhq = "Household Survey (Final Code)",
+        final_code_indq = "Individual Survey (Final Code)"
+    )
+
+```
+
+# {.sidebar width="220px"}
 
 ### Fieldwork Monitoring Dashboard
 
@@ -261,7 +321,7 @@ This Dashboard is based on Data Generated from the GSS App used for Data Collect
 
 ------------------------------------------------------------------------
 
-*Dashboard Updated on `{r} Sys.Date()`*
+*Dashboard Updated on `{r} format(Sys.Date(), format = "%d-%b-%Y")`*
 
 # 📈 Overall Progress
 
@@ -380,7 +440,6 @@ consent_ref_rate <- data_consent$n_consent
 #| content: valuebox
 #| title: "Districts Completed" 
 
-# Look into why colour is not coming the dashboard
 list(
   icon = "globe-central-south-asia",
   color = "info",
@@ -441,7 +500,7 @@ list(
 # Prepare the GPS Data
 df_ex_gps <- data_ex_01 |>
     # Keep only the required variables
-    select(DATA02, DATA08, INTRO_PASSIVE_GPS) |> 
+    select(FIID, CASEID, DATA02, DATA04, DATA11, INTRO_PASSIVE_GPS) |> 
     # Filter out the missing values
     filter(!is.na(INTRO_PASSIVE_GPS)) |> 
     # Extract Coordinate values from the GPS Variable
@@ -467,14 +526,13 @@ df_ex_gps <- data_ex_01 |>
 
 # Draw the Map
 leaflet(data = df_ex_gps) |> 
-    
-    # Add the default basemap
-    # addTiles() |> 
+    # Add the default OpenStreetMap basemap
+    addTiles() |>
     # Adds a clean, professional basemap (less cluttered than 
     # default OpenStreetMap)
     # addProviderTiles(providers$CartoDB.Positron) |>
     # Map with Full J&K shown
-    addProviderTiles(providers$Esri.NatGeoWorldMap) |> 
+    # addProviderTiles(providers$Esri.NatGeoWorldMap) |> 
     
     # Adds the GPS points with clustering
     addMarkers(
@@ -483,8 +541,12 @@ leaflet(data = df_ex_gps) |>
         # This is the magic line for large datasets
         clusterOptions = markerClusterOptions(), 
         # Adds a clickable popup showing the consent status for that household
-        popup = ~paste("<b>Latitude:</b>", round(latitude, 2), 
-                       "<b>Longitude:</b>", round(longitude, 2))
+        popup = ~str_c(
+            "<b>District: </b>", DATA04, "<br>",
+            "<b>PSU Code: </b>", DATA02, "<br>",
+            "<b>FIID: </b>", FIID, "<br>",
+            "<b>HH No: </b>", DATA11
+        )
     )
 
 ```
@@ -516,7 +578,6 @@ df_tbl_progress_dist <- data_ex_01 |>
 ```{r}
 #| label: table-dist-completion
 #| title: District-wise Completion Rate
-#| padding: 5px
 #| echo: false
 #| output: true
 
@@ -561,7 +622,6 @@ df_tbl_progress_psu <- data_ex_01 |>
 ```{r}
 #| label: table-psu-completion
 #| title: PSU-wise Completion Rate
-#| padding: 5px
 #| echo: false
 #| output: true
 
@@ -598,7 +658,6 @@ prev3 <- "17.3%"
 #| content: valuebox
 #| title: "Tobacco Prevalence" 
 
-# Look into why colour is not coming the dashboard
 list(
   icon = "graph-up-arrow",
   color = "info",
@@ -1036,7 +1095,6 @@ fig_curr_ecig01
 
 ```
 
-
 # 👩‍🏫 FIID Statistics
 
 ## Row {height=20%}
@@ -1045,33 +1103,49 @@ fig_curr_ecig01
 #| label: data-valuebox-page3
 #| include: false
 
-hrr <- "92.6%"
-irr <- "90.9%"
-trr <- "84.3%"
+# PSU Response Rate should actually be calculated from the Interview Status 
+# Codes of Household (survey0) and Individual (survey1) Questionnaires.
+# For a completed Interview both HHCurrentEvent and IQCurrentEvent Codes 
+# should be 200 and 400 respectively
+df_vb_fiid_rrate <- data_ex_01 |> 
+    # Calculate Count of HHs
+    summarize(
+        tot_cases_n = n(),
+        tot_attempt_hh_n = sum(!is.na(rrate_allq_01)),
+        comp_allq_hh_n = sum(rrate_allq_01, na.rm = T),
+        comp_hhq_hh_n = sum(rrate_hhq_01, na.rm = T),
+        comp_indq_hh_n = sum(rrate_indq_01, na.rm = T),
+    ) |> 
+    # Calculate Response Rate of HHs in %
+    mutate(
+        tot_attempt_pct = tot_attempt_hh_n / tot_cases_n,
+        comp_allq_hh_pct = comp_allq_hh_n / tot_attempt_hh_n,
+        comp_hhq_hh_pct = comp_hhq_hh_n / tot_attempt_hh_n,
+        comp_indq_hh_pct = comp_indq_hh_n / tot_attempt_hh_n
+    ) |> 
+    # Calculate the statistics for displaying in Valuebox
+    mutate(
+        stat_attempt = scales::label_percent()(tot_attempt_pct),
+        stat_trr = scales::label_percent()(comp_allq_hh_pct),
+        stat_hrr = scales::label_percent()(comp_hhq_hh_pct),
+        stat_irr = scales::label_percent()(comp_indq_hh_pct)
+    )
+
+attempt_rate <- df_vb_fiid_rrate$stat_attempt
+trr <- df_vb_fiid_rrate$stat_trr
+hrr <- df_vb_fiid_rrate$stat_hrr
+irr <- df_vb_fiid_rrate$stat_irr
 
 ```
 
 ```{r}
 #| content: valuebox
-#| title: "Household Response Rate" 
-
-# Look into why colour is not coming the dashboard
-list(
-  icon = "graph-up-arrow",
-  color = "info",
-  value = hrr
-)
-
-```
-
-```{r}
-#| content: valuebox
-#| title: "Individual Response Rate"
+#| title: "Interview Attempt Rate"
 
 list(
-  icon = "graph-up-arrow",
+  icon = "clipboard-data",
   color = "info",
-  value = irr
+  value = attempt_rate
 )
 
 ```
@@ -1081,21 +1155,171 @@ list(
 #| title: "Total Response Rate"
 
 list(
-  icon = "graph-up-arrow",
+  icon = "clipboard-check",
   color = "info",
   value = trr
 )
 
 ```
 
-## Row {height="50%"}
+```{r}
+#| content: valuebox
+#| title: "HH Response Rate" 
+
+list(
+  icon = "house",
+  color = "info",
+  value = hrr
+)
+
+```
+
+```{r}
+#| content: valuebox
+#| title: "IND Response Rate"
+
+list(
+  icon = "person-circle",
+  color = "info",
+  value = irr
+)
+
+```
+
+## Row {height="80%"}
 
 ### Column {width="50%"}
 
+```{r}
+#| label: table-crosstab-fiid-hhqcode
+#| title: Final HH Survey Status by FIID
+#| echo: false
+#| output: true
+
+# Crosstab using gtsummary
+data_ex_01 |> 
+    tbl_cross(
+        FIID, final_code_hhq,
+        missing = "no"
+    ) |> 
+    bold_labels()
+
+```
+
+```{r}
+#| label: table-crosstab-fiid-indqcode
+#| title: Final IND Survey Status by FIID
+#| echo: false
+#| output: true
+
+# Crosstab using gtsummary
+data_ex_01 |> 
+    tbl_cross(
+        FIID, final_code_indq,
+        missing = "no"
+    ) |> 
+    bold_labels()
+
+```
+
 ### Column {width="50%"}
 
-## Row {height="50%"}
+```{r}
+#| label: data-rrate-calculation
+#| include: false
 
-### Column {width="50%"}
+# Transform the Data for calculating the Response Rate for Overall, 
+# Household and Individual Questionnaire.
+df_fiid_rrate <- data_ex_01 |> 
+    # Group by Field Investigator ID
+    group_by(FIID) |> 
+    # Calculate Count of HHs
+    summarize(
+        tot_hh_n = sum(!is.na(rrate_allq_01)),
+        comp_allq_hh_n = sum(rrate_allq_01, na.rm = T),
+        comp_hhq_hh_n = sum(rrate_hhq_01, na.rm = T),
+        comp_indq_hh_n = sum(rrate_indq_01, na.rm = T),
+    ) |> 
+    # Calculate Response Rate of HHs in %
+    mutate(
+        comp_allq_hh_pct = comp_allq_hh_n / tot_hh_n,
+        comp_hhq_hh_pct = comp_hhq_hh_n / tot_hh_n,
+        comp_indq_hh_pct = comp_indq_hh_n / tot_hh_n
+    ) |> 
+    # Categorical status var of Response Rates
+    # Categorical var with scores as category
+    mutate(rrate_status = case_when(
+        comp_allq_hh_pct >= 0.92 & comp_hhq_hh_pct >= 0.92 & 
+            comp_indq_hh_pct >= 0.98 ~ 3,
+        comp_allq_hh_pct < 0.92 & comp_hhq_hh_pct < 0.92 & 
+            comp_indq_hh_pct < 0.98 ~ 1,
+        .default = 2
+    )) |> 
+    # Convert to factor
+    mutate(rrate_status = factor(
+        rrate_status,
+        levels = c(1, 2, 3),
+        labels = c("Very Bad", "Bad", "Good")
+    ))
 
-### Column {width="50%"}
+```
+
+```{r}
+#| label: table-rrate
+#| title: Field Investigator Response Rates
+#| echo: false
+#| output: true
+
+# View as gt table
+df_fiid_rrate |> 
+    select(FIID, tot_hh_n, comp_allq_hh_pct, comp_hhq_hh_pct, 
+           comp_indq_hh_pct, rrate_status) |> 
+    # Convert data to gt object
+    gt() |> 
+    # Add a formal title
+    # tab_header(title = md("**Field Investigator Response Rates**")) |> 
+    # Add Column labels
+    cols_label(
+        FIID = "FIID",
+        tot_hh_n = html("Interviews <br>Attempted"),
+        comp_allq_hh_pct = "TRR",
+        comp_hhq_hh_pct = "HRR",
+        comp_indq_hh_pct = "IRR",
+        rrate_status = html("Interviewer <br>Performance")
+    ) |> 
+    # Add footnotes for the response rates
+    tab_footnote(
+        footnote = "Total Response Rate, Target >= 92%",
+        locations = cells_column_labels(comp_allq_hh_pct)
+    ) |> 
+    tab_footnote(
+        footnote = "Household Response Rate, Target >= 92%",
+        locations = cells_column_labels(comp_hhq_hh_pct)
+    ) |> 
+    tab_footnote(
+        footnote = "Individual Response Rate, Target >= 98%",
+        locations = cells_column_labels(comp_indq_hh_pct)
+    ) |> 
+    # Add % Symbol
+    fmt_percent(
+        columns = ends_with("_pct"),
+        decimals = 1
+    ) |> 
+    # Use Pill Badges to show Response Rate Status
+    data_color(
+        columns = rrate_status,
+        method = "factor",
+        # domain = c("Very Bad", "Bad", "Good"),
+        palette = c("Very Bad" = "red", 
+                    "Bad" = "orange", 
+                    "Good" = "green3")
+    ) |> 
+    # Add Theme to the gt table 
+    gt_theme_espn() |> 
+    # Make the table interactive    
+    opt_interactive(
+        use_pagination = FALSE
+    )
+
+```
+
