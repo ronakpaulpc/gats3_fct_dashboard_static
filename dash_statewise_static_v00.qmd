@@ -14,8 +14,7 @@ editor: visual
 
 ```{r}
 #| label: load-packages
-#| echo: false
-#| output: false
+#| include: false
 
 # Loading the required packages
 easypackages::libraries(
@@ -61,8 +60,7 @@ easypackages::libraries(
 
 ```{r}
 #| label: turn-off-scientific-notation
-#| echo: false
-#| output: false
+#| include: false
 
 options(scipen = 999)
 
@@ -70,8 +68,7 @@ options(scipen = 999)
 
 ```{r}
 #| label: set-gtsummary-default
-#| echo: false
-#| output: false 
+#| include: false 
 
 theme_gtsummary_printer(print_engine = "flextable")
 
@@ -79,8 +76,7 @@ theme_gtsummary_printer(print_engine = "flextable")
 
 ```{r}
 #| label: set-flextable-default
-#| echo: false
-#| output: false 
+#| include: false 
 
 set_flextable_defaults(
   font.size = 10,
