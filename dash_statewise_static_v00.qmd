@@ -18,42 +18,42 @@ editor: visual
 
 # Loading the required packages
 easypackages::libraries(
-    # Data i/o
-    "here",                 # relative file path
-    "rio",                  # file import-export
-    
-    # Data manipulation
-    "janitor",              # data cleaning fns
-    "haven",                # stata, sas, spss data io
-    "labelled",             # var labelling
-    "readxl",               # input excel sheets
-    "writexl",              # output excel sheets
-    "skimr",                # quick data summary
-    "broom",                # view model results
-    
-    # Data analysis
-    # "DHS.rates",            # demographic rates for dhs-like surveys
-    # "GeneralOaxaca",        # BO decomposition for non-linear
-    "survey",               # apply survey weights
-    
-    # Analysis output
-    "gt",                   # Publication-ready HTML Tables
-    "gtExtras",             # Helper functions for gt pkg
-    "gtsummary",            # output summary tables
-    "flextable",            # creating tables from objects
-    "officer",              # editing in office docs
-    "DT",
-    
-    # R graph related packages
-    "ggstats",
-    "RColorBrewer",
-    # "scales",               # to change formats and units
-    "patchwork",
-    "leaflet",
-    
-    # Misc packages
-    "tidyverse",            # Data manipulation iron man
-    "tictoc"                # Code timing
+  # Data i/o
+  "here",                 # relative file path
+  "rio",                  # file import-export
+  
+  # Data manipulation
+  "janitor",              # data cleaning fns
+  "haven",                # stata, sas, spss data io
+  "labelled",             # var labelling
+  "readxl",               # input excel sheets
+  "writexl",              # output excel sheets
+  "skimr",                # quick data summary
+  "broom",                # view model results
+  
+  # Data analysis
+  # "DHS.rates",            # demographic rates for dhs-like surveys
+  # "GeneralOaxaca",        # BO decomposition for non-linear
+  "survey",               # apply survey weights
+  
+  # Analysis output
+  "gt",                   # Publication-ready HTML Tables
+  "gtExtras",             # Helper functions for gt pkg
+  "gtsummary",            # output summary tables
+  "flextable",            # creating tables from objects
+  "officer",              # editing in office docs
+  "DT",
+  
+  # R graph related packages
+  "ggstats",
+  "RColorBrewer",
+  # "scales",               # to change formats and units
+  "patchwork",
+  "leaflet",
+  
+  # Misc packages
+  "tidyverse",            # Data manipulation iron man
+  "tictoc"                # Code timing
 )
 
 ```
@@ -113,6 +113,15 @@ theme_set(theme_gats_dashboard())
 
 ```
 
+```{css}
+
+/* Shrinks the value text inside all bslib value boxes */
+.bslib-value-box .value-box-value {
+font-size: 1.8rem !important; 
+}
+
+```
+
 ```{r}
 #| label: data-import
 #| include: false
@@ -129,145 +138,173 @@ data_ex_00 <- read_csv(here("data_tablet_it", "gats3_flatfile_hp_260219.csv"))
 # Here we prepare the dataset by mutating custom variables needed for 
 # preparing the Dashboard.
 data_ex_01 <- data_ex_00 |> 
-    
-    # Constant
-    mutate(cons = 1) |> 
-    
-    # Overall Progress Check - Based on Status Code
-    # Prepare the binary variable for Progress Calculation
-    # Here we set missing as "0" for progress calculation
-    mutate(progress_overall_01 = if_else(
-        HHCurrentEvent == 200 & IQCurrentEvent == 400,
-        1, 0, missing = 0
-    )) |>
-    
-    # Response Rate Across Overall, Household and Individual
-    # Questionnaires
-    mutate(rrate_allq_01 = if_else(
-        HHCurrentEvent == 200 & IQCurrentEvent == 400,
-        1, 0, missing = NA
-    )) |>
-    # Progress - Household Questionnaire
-    mutate(rrate_hhq_01 = if_else(
-        HHCurrentEvent == 200,
-        1, 0, missing = NA
-    )) |>
-    # Progress - Individual Questionnaire
-    mutate(rrate_indq_01 = if_else(
-        IQCurrentEvent == 400,
-        1, 0, missing = NA
-    )) |>
-    
-    # Final Survey Codes - Recode Pending Codes into Single Category
-    # Recategorize HH Questionnaire
-    mutate(final_code_hhq = if_else(
-        HHCurrentEvent < 200, 
-        "Pending", as.character(HHCurrentEvent), missing = NA
-    )) |> 
-    # Recategorize IND Questionnaire
-    mutate(final_code_indq = if_else(
-        IQCurrentEvent < 400,
-        "Pending", as.character(IQCurrentEvent), missing = NA
-    )) |> 
-    # Convert to Factor
-    mutate(
-        final_code_hhq = factor(
-            final_code_hhq, 
-            levels = c("200", "201", "202", "203", "204", "205", "206",
-                       "208", "209", "999", "Pending")
-        ),
-        final_code_indq = factor(
-            final_code_indq,
-            levels = c("400", "402", "403", "404", "407", "408", "409",
-                       "Pending")
-        )
-    ) |> 
-    
-    # Overall Progress Check - Based on Consent
-    mutate(consent_part = if_else(CONSENT6 == 1, 1, 0, missing = 0)) |> 
-    mutate(consent_part_fct = factor(
-        consent_part, 
-        levels = c(0, 1),
-        labels = c("Remaining", "Completed")
-    )) |> 
-    
-    # Age Distribution [5-year age groups]
-    mutate(age5c = case_when(
-        RSAGE < 15 ~ "14 & Below",
-        RSAGE >=15 & RSAGE <=19 ~ "15-19",
-        RSAGE >=20 & RSAGE <=24 ~ "20-24",
-        RSAGE >=25 & RSAGE <=29 ~ "25-29",
-        RSAGE >=30 & RSAGE <=34 ~ "30-34",
-        RSAGE >=35 & RSAGE <=39 ~ "35-39",
-        RSAGE >=40 & RSAGE <=44 ~ "40-44",
-        RSAGE >=45 & RSAGE <=49 ~ "45-49",
-        RSAGE >=50 & RSAGE <=54 ~ "50-54",
-        RSAGE >=55 & RSAGE <=59 ~ "55-59",
-        RSAGE >=60 & RSAGE <=64 ~ "60-64",
-        RSAGE >=65 & RSAGE <=69 ~ "65-69",
-        RSAGE >=70 & RSAGE <=74 ~ "70-74",
-        RSAGE >=75 & RSAGE <=79 ~ "75-79",
-        RSAGE >= 80 ~ "80+"
+  
+  # Constant
+  mutate(cons = 1) |> 
+  
+  # Overall Progress Check - Based on Status Code
+  # Prepare the binary variables for Progress Calculation
+  # NOTE: We set missing as "0" across all variables
+  mutate(
+    progress_all_01 = if_else(
+      HHCurrentEvent >= 200 | IQCurrentEvent >= 400,
+      1, 0, missing = 0
     ),
-    age5c = factor(
-        age5c,
-        levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44",
-                   "45-49", "50-54", "55-59", "60-64", "65-69", "70-74",
-                   "75-79", "80+")
-    )) |> 
-    # Gender Distribution Check
-    mutate(gender = factor(
-        A01,
-        levels = c(1, 2, 3),
-        labels = c("Male", "Female", "Other")
-    )) |> 
-    mutate(gender_fm = if_else(A01 == 1, 1, 0, missing = NA)) |> 
-    mutate(gender_fm = factor(
-        gender, 
-        levels = c(0, 1), 
-        labels = c("Female", "Male")
-    )) |> 
-    # Currently Smoke Tobacco Prevalence Check
-    mutate(curr_smoke = factor(
-        B01,
-        levels = c(1, 2, 3, -7, -9),
-        labels = c("Daily", "Less than Daily", "Not at all", 
-                   "Don't know", "Refused")
-    )) |>
-    # Currently Smokeless Tobacco Prevalence Check
-    mutate(curr_smokeless = factor(
-        C01,
-        levels = c(1, 2, 3, -7, -9),
-        labels = c("Daily", "Less than Daily", "Not at all", 
-                   "Don't know", "Refused")
-    )) |>
-    # Heard/Seen E-cigarette Check
-    mutate(seen_ecig = factor(
-        EC1,
-        levels = c(1, 2, -9),
-        labels = c("Yes", "No", "Refused")
-    )) |> 
-    # Currently Use E-cigarette Check
-    mutate(curr_ecig = factor(
-        EC2,
-        levels = c(1, 2, 3, -7, -9),
-        labels = c("Daily", "Less than Daily", "Not at all", 
-                   "Don't know", "Refused")
-    )) |> 
-    
-    # Consume Paan masala without tobacco
-    mutate(paan_wotob = factor(
-        CC1,
-        levels = c(1, 2, -9),
-        labels = c("Yes", "No", "Refused")
-    )) |> 
-    # Consume Areca nut without tobacco
-    mutate(areca_nut = factor(
-        CC5,
-        levels = c(1, 2, -9),
-        labels = c("Yes", "No", "Refused")
-    ))
- 
+    progress_hh_01 = if_else(
+      HHCurrentEvent >= 200, 1, 0, missing = 0
+    ),
+    progress_ind_01 = if_else(
+      IQCurrentEvent >= 400, 1, 0, missing = 0
+    ),
+    progress_e01_01 = if_else(
+      !is.na(E01), 1, 0, missing = 0
+    )
+  ) |>
+  
+  # Response Rate Across Total, Household and Individual Questionnaires and
+  # Person-level Refusal Rate computed based on 
+  # GATS QUALITY ASSURANCE MANUAL Page 44-45
+  # Keep only the relevant Codes for HH and IND Surveys
+  mutate(
+    hh_curr_event_6c = if_else(
+      !(HHCurrentEvent %in% c(200, 202, 203, 209, 204, 208)),
+      NA, HHCurrentEvent, missing = NA
+    ),
+    ind_curr_event_6c = if_else(
+      !(IQCurrentEvent %in% c(400, 402, 409, 404, 407, 408)),
+      NA, IQCurrentEvent, missing = NA
+    )
+  ) |> 
+  # Prepare binary variables for HH, IND Surveys and Refusal Rate
+  # Will use this to sum by PSU and get the response rates
+  mutate(
+    # Progress - Household Questionnaire
+    rrate_hhq_01 = if_else(
+      HHCurrentEvent == 200,
+      1, 0, missing = NA
+    ),
+    # Progress - Individual Questionnaire
+    rrate_indq_01 = if_else(
+      IQCurrentEvent == 400,
+      1, 0, missing = NA
+    ),
+    # Person-level Refusal Rate
+    ref_rate_01 = if_else(
+      IQCurrentEvent == 404,
+      1, 0, missing = NA
+    )
+  ) |>
+  
+  # Final Survey Codes - Recode Pending Codes into Single Category
+  # Recategorize HH Questionnaire - Codes <200 is "Pending"
+  mutate(final_code_hhq = if_else(
+    HHCurrentEvent < 200, 
+    "Pending", as.character(HHCurrentEvent), missing = NA
+  )) |> 
+  # Recategorize IND Questionnaire - Codes < 400 is "Pending"
+  mutate(final_code_indq = if_else(
+    IQCurrentEvent < 400,
+    "Pending", as.character(IQCurrentEvent), missing = NA
+  )) |> 
+  # Convert to Factor for showing all values in crosstab
+  mutate(
+    final_code_hhq = factor(
+      final_code_hhq, 
+      levels = c("200", "201", "202", "203", "204", "205", "206",
+                 "208", "209", "999", "Pending")
+    ),
+    final_code_indq = factor(
+      final_code_indq,
+      levels = c("400", "402", "403", "404", "407", "408", "409",
+                 "Pending")
+    )
+  ) |> 
+  
+  # Overall Progress Check - Based on Consent
+  mutate(consent_part = if_else(CONSENT6 == 1, 1, 0, missing = 0)) |> 
+  mutate(consent_part_fct = factor(
+    consent_part, 
+    levels = c(0, 1),
+    labels = c("Remaining", "Completed")
+  )) |> 
+  
+  # Age Distribution [5-year age groups]
+  mutate(age5c = case_when(
+    RSAGE < 15 ~ "14 & Below",
+    RSAGE >=15 & RSAGE <=19 ~ "15-19",
+    RSAGE >=20 & RSAGE <=24 ~ "20-24",
+    RSAGE >=25 & RSAGE <=29 ~ "25-29",
+    RSAGE >=30 & RSAGE <=34 ~ "30-34",
+    RSAGE >=35 & RSAGE <=39 ~ "35-39",
+    RSAGE >=40 & RSAGE <=44 ~ "40-44",
+    RSAGE >=45 & RSAGE <=49 ~ "45-49",
+    RSAGE >=50 & RSAGE <=54 ~ "50-54",
+    RSAGE >=55 & RSAGE <=59 ~ "55-59",
+    RSAGE >=60 & RSAGE <=64 ~ "60-64",
+    RSAGE >=65 & RSAGE <=69 ~ "65-69",
+    RSAGE >=70 & RSAGE <=74 ~ "70-74",
+    RSAGE >=75 & RSAGE <=79 ~ "75-79",
+    RSAGE >= 80 ~ "80+"
+  ),
+  age5c = factor(
+    age5c,
+    levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44",
+               "45-49", "50-54", "55-59", "60-64", "65-69", "70-74",
+               "75-79", "80+")
+  )) |> 
+  # Gender Distribution Check
+  mutate(gender = factor(
+    A01,
+    levels = c(1, 2, 3),
+    labels = c("Male", "Female", "Other")
+  )) |> 
+  mutate(gender_fm = if_else(A01 == 1, 1, 0, missing = NA)) |> 
+  mutate(gender_fm = factor(
+    gender, 
+    levels = c(0, 1), 
+    labels = c("Female", "Male")
+  )) |> 
+  # Currently Smoke Tobacco Prevalence Check
+  mutate(curr_smoke = factor(
+    B01,
+    levels = c(1, 2, 3, -7, -9),
+    labels = c("Daily", "Less than Daily", "Not at all", 
+               "Don't know", "Refused")
+  )) |>
+  # Currently Smokeless Tobacco Prevalence Check
+  mutate(curr_smokeless = factor(
+    C01,
+    levels = c(1, 2, 3, -7, -9),
+    labels = c("Daily", "Less than Daily", "Not at all", 
+               "Don't know", "Refused")
+  )) |>
+  # Heard/Seen E-cigarette Check
+  mutate(seen_ecig = factor(
+    EC1,
+    levels = c(1, 2, -9),
+    labels = c("Yes", "No", "Refused")
+  )) |> 
+  # Currently Use E-cigarette Check
+  mutate(curr_ecig = factor(
+    EC2,
+    levels = c(1, 2, 3, -7, -9),
+    labels = c("Daily", "Less than Daily", "Not at all", 
+               "Don't know", "Refused")
+  )) |> 
+  
+  # Consume Paan masala without tobacco
+  mutate(paan_wotob = factor(
+    CC1,
+    levels = c(1, 2, -9),
+    labels = c("Yes", "No", "Refused")
+  )) |> 
+  # Consume Areca nut without tobacco
+  mutate(areca_nut = factor(
+    CC5,
+    levels = c(1, 2, -9),
+    labels = c("Yes", "No", "Refused")
+  ))
+
 ```
 
 ```{r}
@@ -276,14 +313,14 @@ data_ex_01 <- data_ex_00 |>
 
 # Add variable labels to selected variables
 data_ex_01 <- data_ex_01 |> 
-    set_variable_labels(
-        # ID Variables
-        # FIID = "Field Investigator ID",
-        
-        # Custom Variables
-        final_code_hhq = "Household Survey (Final Code)",
-        final_code_indq = "Individual Survey (Final Code)"
-    )
+  set_variable_labels(
+    # ID Variables
+    # FIID = "Field Investigator ID",
+    
+    # Custom Variables
+    final_code_hhq = "Household Survey (Final Code)",
+    final_code_indq = "Individual Survey (Final Code)"
+  )
 
 ```
 
@@ -293,12 +330,13 @@ data_ex_01 <- data_ex_01 |>
 
 This dashboard displays statistics for `{r} data_ex_00$DATA01 |> unique()`:
 
-|                      |                                     |
-|----------------------|-------------------------------------|
-| **Num of Districts** | `{r} n_distinct(data_ex_00$DATA04)` |
-| **Num of PSUs**      | `{r} n_distinct(data_ex_00$DATA02)` |
-| **Num of HHs**       | `{r} nrow(data_ex_00)`              |
-
+|                         |                                     |
+|-------------------------|-------------------------------------|
+| **Num of Districts**    | `{r} n_distinct(data_ex_00$DATA04)` |
+| **Num of PSUs**         | `{r} n_distinct(data_ex_00$DATA02)` |
+| **Num of HHs**          | `{r} nrow(data_ex_00)`              |
+| **Num of Teams**        | `{r} unique(data_ex_01$FIID) |> str_sub(1, 4) |> n_distinct()` |
+| **Num of Interviewers** | `{r} n_distinct(data_ex_00$FIID)`
 ------------------------------------------------------------------------
 
 ```{r}
@@ -330,105 +368,116 @@ This Dashboard is based on Data Generated from the GSS App used for Data Collect
 # Transform the Data Overall for Interview Progress calculation Across
 # ALL DISTRICTS
 data_progress_dist <- data_ex_01 |> 
-    # Group by Districts
-    group_by(DATA04) |> 
-    # Calculate the Total and Completed Cases across districts
-    summarize(
-        tot_hh_n = sum(cons),
-        comp_hh_n = sum(progress_overall_01)
-    ) |> 
-    # Calculate Number of Districts Completed
-    mutate(progress_dist_01 = if_else(
-        tot_hh_n == comp_hh_n, 
-        1, 0, missing = 0
-    )) |> 
-    # Calculate overall stats of Districts
-    summarize(
-        tot_dist_n = n(),
-        comp_dist_n = sum(progress_dist_01)
-    ) |> 
-    # Calculate Percentage of Completed Districts
-    mutate(comp_dist_pct = (comp_dist_n / tot_dist_n)) |>
-    # Prepare the Progress Display Statistics in N (%)
-    mutate(stat_dist = str_c(
-        comp_dist_n, 
-        " (", 
-        scales::label_percent()(comp_dist_pct),
-        ")"
-    ))
+  # Group by Districts
+  group_by(DATA04) |> 
+  # Calculate the Total and Completed Cases across districts
+  summarize(
+    tot_hh_n = sum(cons),
+    comp_hh_n = sum(progress_all_01)
+  ) |> 
+  # Calculate Number of Districts Completed
+  mutate(progress_dist_01 = if_else(
+    comp_hh_n >= 30, 
+    1, 0, missing = 0
+  )) |> 
+  # Calculate overall stats of Districts
+  summarize(
+    tot_dist_n = n(),
+    comp_dist_n = sum(progress_dist_01)
+  ) |> 
+  # Calculate Percentage of Completed Districts
+  mutate(comp_dist_pct = (comp_dist_n / tot_dist_n)) |>
+  # Prepare the Progress Display Statistics in N (%)
+  mutate(stat_dist = str_c(
+    comp_dist_n, 
+    " (", 
+    scales::label_percent()(comp_dist_pct),
+    ")"
+  ))
 
 
 # Transform the Data Overall for Interview Progress calculation Across
 # ALL PSUS
 data_progress_psu <- data_ex_01 |> 
-    # Group by PSUs
-    group_by(DATA02) |> 
-    # Calculate the Total and Completed Cases across districts
-    summarize(
-        tot_hh_n = sum(cons),
-        comp_hh_n = sum(progress_overall_01)
-    ) |> 
-    # Calculate Number of PSUs Completed
-    mutate(progress_psu_01 = if_else(
-        tot_hh_n == comp_hh_n, 
-        1, 0, missing = 0
-    )) |> 
-    # Calculate overall stats of PSUs
-    summarize(
-        tot_psu_n = n(),
-        comp_psu_n = sum(progress_psu_01)
-    ) |> 
-    # Calculate Percentage of Completed PSUs
-    mutate(comp_psu_pct = (comp_psu_n / tot_psu_n)) |>
-    # Prepare the Progress Display Statistics in N (%)
-    mutate(stat_psu = str_c(
-        comp_psu_n, 
-        " (", 
-        scales::label_percent()(comp_psu_pct),
-        ")"
-    ))
+  # Group by PSUs
+  group_by(DATA02) |> 
+  # Calculate the Total and Completed Cases across PSUs
+  summarize(
+    tot_hh_n = sum(cons),
+    comp_hh_n = sum(progress_all_01)
+  ) |> 
+  # Calculate Number of PSUs Completed
+  mutate(progress_psu_01 = if_else(
+    comp_hh_n >= 30, 
+    1, 0, missing = 0
+  )) |> 
+  # Calculate overall stats of PSUs
+  summarize(
+    tot_psu_n = n(),
+    comp_psu_n = sum(progress_psu_01)
+  ) |> 
+  # Calculate Percentage of Completed PSUs
+  mutate(comp_psu_pct = (comp_psu_n / tot_psu_n)) |>
+  # Prepare the Progress Display Statistics in N (%)
+  mutate(stat_psu = str_c(
+    comp_psu_n, 
+    " (", 
+    scales::label_percent()(comp_psu_pct),
+    ")"
+  ))
 
 
 # Transform the Data Overall for Interview Progress calculation Across
 # ALL HOUSEHOLDS
 data_progress_hh <- data_ex_01 |> 
-    # Calculate Total and Completed Cases
-    summarize(
-        tot_hh_n = sum(cons),
-        comp_hh_n = sum(progress_overall_01)
-    ) |> 
-    # Calculate Percentage of Completed Cases
-    mutate(pct_hh = (comp_hh_n / tot_hh_n)) |> 
-    # Prepare the Progress Display Statistics in N (%)
-    mutate(stat_hh = str_c(
-        comp_hh_n, 
-        " (", 
-        scales::label_percent()(pct_hh),
-        ")"
-    ))
+  # Calculate Total and Completed HH Interviews
+  summarize(
+    tot_hh_n = sum(cons),
+    comp_hh_n = sum(progress_hh_01)
+  ) |> 
+  # Calculate Percentage of Completed HH Interviews
+  mutate(pct_hh = (comp_hh_n / tot_hh_n)) |> 
+  # This converts the stat to string, which we don't want
+  # mutate(cases_pct = format(cases_pct))
+  # Prepare the Progress Display Statistics in N (%)
+  mutate(stat_hh = str_c(
+    comp_hh_n, 
+    " (", 
+    scales::label_percent()(pct_hh),
+    ")"
+  ))
 
 
-# Estimate the Consent refusal rate
-data_consent <- data_ex_01 |> 
-    tabyl(CONSENT6) |> 
-    filter(CONSENT6 == 2) |> 
-    mutate(
-        n_consent = str_c(
-            n, 
-            " (", 
-            scales::label_percent(accuracy = 0.1)(valid_percent),
-            ")"
-        ))
+# Transform the Data Overall for Interview Progress calculation Across
+# ALL INDIVIDUALS
+# NOTE: CALCULATED BASED ON E01 IS NOT MISSING
+data_progress_ind <- data_ex_01 |> 
+  # Calculate Total and Completed IND Interviews
+  summarize(
+    tot_ind_n = sum(cons),
+    comp_ind_n = sum(progress_e01_01)
+  ) |> 
+  # Calculate Percentage of Completed IND Interviews
+  mutate(pct_ind = (comp_ind_n / tot_ind_n)) |> 
+  # This converts the stat to string, which we don't want
+  # mutate(cases_pct = format(cases_pct))
+  # Prepare the Progress Display Statistics in N (%)
+  mutate(stat_ind = str_c(
+    comp_ind_n, 
+    " (", 
+    scales::label_percent()(pct_ind),
+    ")"
+  ))
 
 
 # Districts Completed
 comp_dist <- data_progress_dist$stat_dist
 # PSUs Completed
 comp_psu <- data_progress_psu$stat_psu
-# HHs Completed
+# HH Survey Completed
 comp_hh <- data_progress_hh$stat_hh
-# Consent Refusal Rate
-consent_ref_rate <- data_consent$n_consent
+# IND Survey Completed
+comp_ind <- data_progress_ind$stat_ind
 
 ```
 
@@ -449,7 +498,7 @@ list(
 #| title: "PSUs Completed"
 
 list(
-  icon = "database-up",
+  icon = "pin-map",
   color = "info",
   value = comp_psu
 )
@@ -458,10 +507,10 @@ list(
 
 ```{r}
 #| content: valuebox
-#| title: "Households Completed"
+#| title: "HH Interviews Completed"
 
 list(
-  # icon = "graph-up-arrow",
+  icon = "house-check",
   color = "info",
   value = comp_hh
 )
@@ -470,19 +519,19 @@ list(
 
 ```{r}
 #| content: valuebox
-#| title: "Consent Refusal Rate"
+#| title: "IND Interviews Completed"
 
 list(
-  icon = "hand-thumbs-up",
-  color = "success",
-  value = consent_ref_rate
+  icon = "person-check",
+  color = "info",
+  value = comp_ind
 )
 
 # NOTE: 
 #   Display last updated date in dashboard [D].
 #   HHs Refusal Rate
 #   HHs covered each day. Using Progress bars
-  
+
 ```
 
 ## Row {height="80%"}
@@ -495,21 +544,21 @@ list(
 
 # Prepare the GPS Data
 df_ex_gps <- data_ex_01 |>
-    # Keep only the required variables
-    select(FIID, CASEID, DATA02, DATA04, DATA11, INTRO_PASSIVE_GPS) |> 
-    # Filter out the missing values
-    filter(!is.na(INTRO_PASSIVE_GPS)) |> 
-    # Extract Coordinate values from the GPS Variable
-    separate_wider_delim(
-        INTRO_PASSIVE_GPS, 
-        delim = " ",
-        names = c("latitude", "longitude", NA, NA)
-    ) |> 
-    # Convert the variable type to numeric
-    mutate(
-        latitude = as.numeric(latitude),
-        longitude = as.numeric(longitude)
-    )
+  # Keep only the required variables
+  select(FIID, CASEID, DATA02, DATA04, DATA11, INTRO_PASSIVE_GPS) |> 
+  # Filter out the missing values
+  filter(!is.na(INTRO_PASSIVE_GPS)) |> 
+  # Extract Coordinate values from the GPS Variable
+  separate_wider_delim(
+    INTRO_PASSIVE_GPS, 
+    delim = " ",
+    names = c("latitude", "longitude", NA, NA)
+  ) |> 
+  # Convert the variable type to numeric
+  mutate(
+    latitude = as.numeric(latitude),
+    longitude = as.numeric(longitude)
+  )
 
 ```
 
@@ -522,28 +571,28 @@ df_ex_gps <- data_ex_01 |>
 
 # Draw the Map
 leaflet(data = df_ex_gps) |> 
-    # Add the default OpenStreetMap basemap
-    addTiles() |>
-    # Adds a clean, professional basemap (less cluttered than 
-    # default OpenStreetMap)
-    # addProviderTiles(providers$CartoDB.Positron) |>
-    # Map with Full J&K shown
-    # addProviderTiles(providers$Esri.NatGeoWorldMap) |> 
-    
-    # Adds the GPS points with clustering
-    addMarkers(
-        lat = ~latitude, 
-        lng = ~longitude,
-        # This is the magic line for large datasets
-        clusterOptions = markerClusterOptions(), 
-        # Adds a clickable popup showing the consent status for that household
-        popup = ~str_c(
-            "<b>District: </b>", DATA04, "<br>",
-            "<b>PSU Code: </b>", DATA02, "<br>",
-            "<b>FIID: </b>", FIID, "<br>",
-            "<b>HH No: </b>", DATA11
-        )
+  # Add the default OpenStreetMap basemap
+  addTiles() |>
+  # Adds a clean, professional basemap (less cluttered than 
+  # default OpenStreetMap)
+  # addProviderTiles(providers$CartoDB.Positron) |>
+  # Map with Full J&K shown
+  # addProviderTiles(providers$Esri.NatGeoWorldMap) |> 
+  
+  # Adds the GPS points with clustering
+  addMarkers(
+    lat = ~latitude, 
+    lng = ~longitude,
+    # This is the magic line for large datasets
+    clusterOptions = markerClusterOptions(), 
+    # Adds a clickable popup showing the consent status for that household
+    popup = ~str_c(
+      "<b>District: </b>", DATA04, "<br>",
+      "<b>PSU Code: </b>", DATA02, "<br>",
+      "<b>FIID: </b>", FIID, "<br>",
+      "<b>HH No: </b>", DATA11
     )
+  )
 
 ```
 
@@ -556,18 +605,18 @@ leaflet(data = df_ex_gps) |>
 # Transform the Data Overall for Interview Progress calculation Across 
 # ALL DISTRICTS
 df_tbl_progress_dist <- data_ex_01 |> 
-    # Group by Districts
-    group_by(DATA04) |> 
-    # Calculate the Total and Completed Cases across Districts
-    summarize(
-        tot_hh_n = sum(cons),
-        comp_hh_n = sum(progress_overall_01)
-    ) |> 
-    # Calculate Prop and % of HHs Completed across Districts
-    mutate(
-        prop_hh = comp_hh_n / tot_hh_n,
-        pct_hh = scales::label_percent()(prop_hh)
-    )
+  # Group by Districts
+  group_by(DATA04) |> 
+  # Calculate the Total and Completed Cases across Districts
+  summarize(
+    tot_hh_n = sum(cons),
+    comp_hh_n = sum(progress_all_01)
+  ) |> 
+  # Calculate Prop and % of HHs Completed across Districts
+  mutate(
+    prop_hh = comp_hh_n / tot_hh_n,
+    pct_hh = scales::label_percent()(prop_hh)
+  )
 
 ```
 
@@ -579,17 +628,17 @@ df_tbl_progress_dist <- data_ex_01 |>
 
 # View as gt table
 df_tbl_progress_dist |> select(-prop_hh) |> 
-    gt() |> 
-    cols_label(
-        DATA04 = "District Name",
-        tot_hh_n = "Total HHs",
-        comp_hh_n = "Completed HHs",
-        pct_hh = "Completion Rate"
-    ) |> 
-    gt_theme_espn() |> 
-    opt_interactive(
-      use_pagination = FALSE
-    )
+  gt() |> 
+  cols_label(
+    DATA04 = "District Name",
+    tot_hh_n = "Total HHs",
+    comp_hh_n = "Completed HHs",
+    pct_hh = "Completion Rate"
+  ) |> 
+  gt_theme_espn() |> 
+  opt_interactive(
+    use_pagination = FALSE
+  )
 
 ```
 
@@ -600,18 +649,18 @@ df_tbl_progress_dist |> select(-prop_hh) |>
 # Transform the Data Overall for Interview Progress calculation Across 
 # ALL PSUS
 df_tbl_progress_psu <- data_ex_01 |> 
-    # Group by Districts
-    group_by(DATA02) |> 
-    # Calculate the Total and Completed Cases across Districts
-    summarize(
-        tot_hh_n = sum(cons),
-        comp_hh_n = sum(progress_overall_01)
-    ) |> 
-    # Calculate Prop and % of HHs Completed across Districts
-    mutate(
-        prop_hh = comp_hh_n / tot_hh_n,
-        pct_hh = scales::label_percent()(prop_hh)
-    )
+  # Group by Districts
+  group_by(DATA02) |> 
+  # Calculate the Total and Completed Cases across Districts
+  summarize(
+    tot_hh_n = sum(cons),
+    comp_hh_n = sum(progress_all_01)
+  ) |> 
+  # Calculate Prop and % of HHs Completed across Districts
+  mutate(
+    prop_hh = comp_hh_n / tot_hh_n,
+    pct_hh = scales::label_percent()(prop_hh)
+  )
 
 ```
 
@@ -622,17 +671,17 @@ df_tbl_progress_psu <- data_ex_01 |>
 #| output: true
 
 df_tbl_progress_psu |> select(-prop_hh) |> 
-    gt() |> 
-    cols_label(
-        "DATA02" = "PSU Code",
-        "tot_hh_n" = "Total HHs", 
-        "comp_hh_n" = "Completed HHs", 
-        "pct_hh" = "Completion Rate"
-    ) |> 
-    gt_theme_espn() |> 
-    opt_interactive(
-      use_pagination = FALSE
-    )
+  gt() |> 
+  cols_label(
+    "DATA02" = "PSU Code",
+    "tot_hh_n" = "Total HHs", 
+    "comp_hh_n" = "Completed HHs", 
+    "pct_hh" = "Completion Rate"
+  ) |> 
+  gt_theme_espn() |> 
+  opt_interactive(
+    use_pagination = FALSE
+  )
 
 ```
 
@@ -656,7 +705,7 @@ prev3 <- "17.3%"
 
 list(
   icon = "graph-up-arrow",
-  color = "info",
+  color = "danger",
   value = prev1
 )
 
@@ -668,7 +717,7 @@ list(
 
 list(
   icon = "graph-up-arrow",
-  color = "info",
+  color = "danger",
   value = prev2
 )
 
@@ -680,7 +729,7 @@ list(
 
 list(
   icon = "graph-up-arrow",
-  color = "info",
+  color = "danger",
   value = prev3
 )
 
@@ -697,19 +746,19 @@ list(
 # Age distribution - Basic
 # !!! Missing values will not be displayed!!!
 dt_age5c00 <- data_ex_01 |> 
-    tabyl(age5c, show_na = F) |> 
-    adorn_totals()
+  tabyl(age5c, show_na = F) |> 
+  adorn_totals()
 dt_age5c00 
 
 # Age distribution table - For graph
 dt_age5c01 <- dt_age5c00 |> 
-    # Convert percent scale to 0-100
-    mutate(percent = percent * 100) |> 
-    rename(
-        "pct" = "percent"
-    ) |> 
-    # Remove the Row of Totals
-    slice(1:(n() - 1))
+  # Convert percent scale to 0-100
+  mutate(percent = percent * 100) |> 
+  rename(
+    "pct" = "percent"
+  ) |> 
+  # Remove the Row of Totals
+  slice(1:(n() - 1))
 dt_age5c01
 
 ```
@@ -723,41 +772,41 @@ dt_age5c01
 
 # Age distribution Graph - Basic
 fig_age5c00 <- dt_age5c01 |> 
-    ggplot(aes(x = age5c, y = pct)) +
-    # Adding the Bars
-    geom_col(
-        # colour = "grey10",
-        fill = "steelblue", width = 0.7
-    ) +
-    # Adding the graph labels
-    geom_text(
-        aes(
-            label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"),
-        ),
-        hjust = 0,
-        vjust = 0,
-        size = 3.5,
-        fontface = "bold",
-        angle = 30
-    ) +
-    labs(
-        x = NULL,
-        y = NULL
-    ) +
-    # Expand Y limits slightly so labels don't hit the top of the box
-    scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
-    # theme_light()
+  ggplot(aes(x = age5c, y = pct)) +
+  # Adding the Bars
+  geom_col(
+    # colour = "grey10",
+    fill = "steelblue", width = 0.7
+  ) +
+  # Adding the graph labels
+  geom_text(
+    aes(
+      label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"),
+    ),
+    hjust = 0,
+    vjust = 0,
+    size = 3.5,
+    fontface = "bold",
+    angle = 30
+  ) +
+  labs(
+    x = NULL,
+    y = NULL
+  ) +
+  # Expand Y limits slightly so labels don't hit the top of the box
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
+# theme_light()
 
 # Age distribution Graph - Polished
 fig_age5c01 <- fig_age5c00 +
-    theme(
-        # panel.grid = element_blank(),
-        axis.text.x = element_text(
-            face = "bold",
-            size = rel(1.4)
-        ),
-        axis.text.y = element_blank()
-    )
+  theme(
+    # panel.grid = element_blank(),
+    axis.text.x = element_text(
+      face = "bold",
+      size = rel(1.4)
+    ),
+    axis.text.y = element_blank()
+  )
 fig_age5c01
 
 ```
@@ -772,19 +821,19 @@ fig_age5c01
 # Gender distribution table - Basic
 # !!! Missing values will not be displayed!!!
 dt_gender00 <- data_ex_01 |> 
-    tabyl(gender, show_na = F) |> 
-    adorn_totals()
+  tabyl(gender, show_na = F) |> 
+  adorn_totals()
 dt_gender00 
 
 # Gender distribution table - For graph
 dt_gender01 <- dt_gender00 |> 
-    # Convert percent scale to 0-100
-    mutate(percent = percent * 100) |> 
-    rename(
-        "pct" = "percent"
-    ) |> 
-    # Remove the Row of Totals
-    slice(1:(n() - 1))
+  # Convert percent scale to 0-100
+  mutate(percent = percent * 100) |> 
+  rename(
+    "pct" = "percent"
+  ) |> 
+  # Remove the Row of Totals
+  slice(1:(n() - 1))
 dt_gender01
 
 ```
@@ -798,37 +847,37 @@ dt_gender01
 
 # Gender distribution Graph - Basic
 fig_gender00 <- dt_gender01 |> 
-    ggplot(aes(x = gender, y = pct)) +
-    geom_col(
-        # colour = "grey10",
-        fill = "navy", width = 0.7
-    ) +
-    geom_text(
-        aes(
-            label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"),
-        ),
-        vjust = -0.5,
-        size = 3.5,
-        fontface = "bold"
-    ) +
-    labs(
-        x = NULL,
-        y = NULL
-    ) +
-    # Expand Y limits slightly so labels don't hit the top of the box
-    scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
-    # theme_light()
+  ggplot(aes(x = gender, y = pct)) +
+  geom_col(
+    # colour = "grey10",
+    fill = "navy", width = 0.7
+  ) +
+  geom_text(
+    aes(
+      label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"),
+    ),
+    vjust = -0.5,
+    size = 3.5,
+    fontface = "bold"
+  ) +
+  labs(
+    x = NULL,
+    y = NULL
+  ) +
+  # Expand Y limits slightly so labels don't hit the top of the box
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
+# theme_light()
 
 # Gender distribution Graph - Polished
 fig_gender01 <- fig_gender00 +
-    theme(
-        # panel.grid = element_blank(),
-        axis.text.x = element_text(
-            face = "bold",
-            size = rel(1.4)
-        ),
-        axis.text.y = element_blank()
-    )
+  theme(
+    # panel.grid = element_blank(),
+    axis.text.x = element_text(
+      face = "bold",
+      size = rel(1.4)
+    ),
+    axis.text.y = element_blank()
+  )
 fig_gender01
 
 ```
@@ -845,19 +894,19 @@ fig_gender01
 # Currently smoke tobacco table - Basic
 # !!! Missing values will not be displayed!!!
 dt_curr_smoke00 <- data_ex_01 |> 
-    tabyl(curr_smoke, show_na = F) |> 
-    adorn_totals()
+  tabyl(curr_smoke, show_na = F) |> 
+  adorn_totals()
 dt_curr_smoke00 
 
 # Currently smoke tobacco table - For graph
 dt_curr_smoke01 <- dt_curr_smoke00 |> 
-    # Convert percent scale to 0-100
-    mutate(percent = percent * 100) |> 
-    rename(
-        "pct" = "percent"
-    ) |> 
-    # Remove the Row of Totals
-    slice(1:(n() - 1))
+  # Convert percent scale to 0-100
+  mutate(percent = percent * 100) |> 
+  rename(
+    "pct" = "percent"
+  ) |> 
+  # Remove the Row of Totals
+  slice(1:(n() - 1))
 dt_curr_smoke01
 
 ```
@@ -870,32 +919,32 @@ dt_curr_smoke01
 
 # Currently smoke tobacco Graph - Basic
 fig_curr_smoke00 <- dt_curr_smoke01 |> 
-    ggplot(aes(x = pct, y = curr_smoke |> fct_rev())) +
-    geom_col(
-        # colour = "grey10",
-        fill = "gold2"
-    ) +
-    geom_text(
-        aes(x = 15, 
-            label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"))
-    ) +
-    labs(
-        x = NULL,
-        y = NULL
-    ) +
-    theme_light()
+  ggplot(aes(x = pct, y = curr_smoke |> fct_rev())) +
+  geom_col(
+    # colour = "grey10",
+    fill = "gold2"
+  ) +
+  geom_text(
+    aes(x = 15, 
+        label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"))
+  ) +
+  labs(
+    x = NULL,
+    y = NULL
+  ) +
+  theme_light()
 
 # Currently smoke tobacco Graph - Polished
 fig_curr_smoke01 <- fig_curr_smoke00 +
-    xlim(0, 100) +
-    theme(
-        # panel.grid = element_blank(),
-        axis.text.x = element_blank(),
-        axis.text.y = element_text(
-            face = "bold",
-            size = rel(1.2)
-        )
+  xlim(0, 100) +
+  theme(
+    # panel.grid = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(
+      face = "bold",
+      size = rel(1.2)
     )
+  )
 fig_curr_smoke01
 
 ```
@@ -908,19 +957,19 @@ fig_curr_smoke01
 # Currently smokeless tobacco table - Basic
 # !!! Missing values will not be displayed!!!
 dt_curr_smokeless00 <- data_ex_01 |> 
-    tabyl(curr_smokeless, show_na = F) |> 
-    adorn_totals()
+  tabyl(curr_smokeless, show_na = F) |> 
+  adorn_totals()
 dt_curr_smokeless00 
 
 # Currently smokeless tobacco table - For graph
 dt_curr_smokeless01 <- dt_curr_smokeless00 |> 
-    # Convert percent scale to 0-100
-    mutate(percent = percent * 100) |> 
-    rename(
-        "pct" = "percent"
-    ) |> 
-    # Remove the Row of Totals
-    slice(1:(n() - 1))
+  # Convert percent scale to 0-100
+  mutate(percent = percent * 100) |> 
+  rename(
+    "pct" = "percent"
+  ) |> 
+  # Remove the Row of Totals
+  slice(1:(n() - 1))
 dt_curr_smokeless01
 
 ```
@@ -933,32 +982,32 @@ dt_curr_smokeless01
 
 # Currently smokeless tobacco Graph - Basic
 fig_curr_smokeless00 <- dt_curr_smokeless01 |> 
-    ggplot(aes(x = pct, y = curr_smokeless |> fct_rev())) +
-    geom_col(
-        # colour = "grey10",
-        fill = "gold2"
-    ) +
-    geom_text(
-        aes(x = 15, 
-            label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"))
-    ) +
-    labs(
-        x = NULL,
-        y = NULL
-    ) +
-    theme_light()
+  ggplot(aes(x = pct, y = curr_smokeless |> fct_rev())) +
+  geom_col(
+    # colour = "grey10",
+    fill = "gold2"
+  ) +
+  geom_text(
+    aes(x = 15, 
+        label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"))
+  ) +
+  labs(
+    x = NULL,
+    y = NULL
+  ) +
+  theme_light()
 
 # Currently smokeless tobacco Graph - Polished
 fig_curr_smokeless01 <- fig_curr_smokeless00 +
-    xlim(0, 100) +
-    theme(
-        # panel.grid = element_blank(),
-        axis.text.x = element_blank(),
-        axis.text.y = element_text(
-            face = "bold",
-            size = rel(1.2)
-        )
+  xlim(0, 100) +
+  theme(
+    # panel.grid = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(
+      face = "bold",
+      size = rel(1.2)
     )
+  )
 fig_curr_smokeless01
 
 ```
@@ -973,19 +1022,19 @@ fig_curr_smokeless01
 # Seen e-cigarette table - Basic
 # !!! Missing values will not be displayed!!!
 dt_seen_ecig00 <- data_ex_01 |> 
-    tabyl(seen_ecig, show_na = F) |> 
-    adorn_totals()
+  tabyl(seen_ecig, show_na = F) |> 
+  adorn_totals()
 dt_seen_ecig00 
 
 # Seen e-cigarette table - For graph
 dt_seen_ecig01 <- dt_seen_ecig00 |> 
-    # Convert percent scale to 0-100
-    mutate(percent = percent * 100) |> 
-    rename(
-        "pct" = "percent"
-    ) |> 
-    # Remove the Row of Totals
-    slice(1:(n() - 1))
+  # Convert percent scale to 0-100
+  mutate(percent = percent * 100) |> 
+  rename(
+    "pct" = "percent"
+  ) |> 
+  # Remove the Row of Totals
+  slice(1:(n() - 1))
 dt_seen_ecig01
 
 ```
@@ -998,32 +1047,32 @@ dt_seen_ecig01
 
 # Seen e-cigarette Graph - Basic
 fig_seen_ecig00 <- dt_seen_ecig01 |> 
-    ggplot(aes(x = pct, y = seen_ecig |> fct_rev())) +
-    geom_col(
-        # colour = "grey10",
-        fill = "orange3"
-    ) +
-    geom_text(
-        aes(x = 15, 
-            label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"))
-    ) +
-    labs(
-        x = NULL,
-        y = NULL
-    ) +
-    theme_light()
+  ggplot(aes(x = pct, y = seen_ecig |> fct_rev())) +
+  geom_col(
+    # colour = "grey10",
+    fill = "orange3"
+  ) +
+  geom_text(
+    aes(x = 15, 
+        label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"))
+  ) +
+  labs(
+    x = NULL,
+    y = NULL
+  ) +
+  theme_light()
 
 # Seen e-cigarette Graph - Polished
 fig_seen_ecig01 <- fig_seen_ecig00 +
-    xlim(0, 100) +
-    theme(
-        # panel.grid = element_blank(),
-        axis.text.x = element_blank(),
-        axis.text.y = element_text(
-            face = "bold",
-            size = rel(1.2)
-        )
+  xlim(0, 100) +
+  theme(
+    # panel.grid = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(
+      face = "bold",
+      size = rel(1.2)
     )
+  )
 fig_seen_ecig01
 
 ```
@@ -1036,19 +1085,19 @@ fig_seen_ecig01
 # Currently use e-cigarette table - Basic
 # !!! Missing values will not be displayed!!!
 dt_curr_ecig00 <- data_ex_01 |> 
-    tabyl(curr_ecig, show_na = F) |> 
-    adorn_totals()
+  tabyl(curr_ecig, show_na = F) |> 
+  adorn_totals()
 dt_curr_ecig00 
 
 # Currently use e-cigarette table - For graph
 dt_curr_ecig01 <- dt_curr_ecig00 |> 
-    # Convert percent scale to 0-100
-    mutate(percent = percent * 100) |> 
-    rename(
-        "pct" = "percent"
-    ) |> 
-    # Remove the Row of Totals
-    slice(1:(n() - 1))
+  # Convert percent scale to 0-100
+  mutate(percent = percent * 100) |> 
+  rename(
+    "pct" = "percent"
+  ) |> 
+  # Remove the Row of Totals
+  slice(1:(n() - 1))
 dt_curr_ecig01
 
 ```
@@ -1061,32 +1110,32 @@ dt_curr_ecig01
 
 # Currently use e-cigarette Graph - Basic
 fig_curr_ecig00 <- dt_curr_ecig01 |> 
-    ggplot(aes(x = pct, y = curr_ecig |> fct_rev())) +
-    geom_col(
-        # colour = "grey10",
-        fill = "orange3"
-    ) +
-    geom_text(
-        aes(x = 15, 
-            label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"))
-    ) +
-    labs(
-        x = NULL,
-        y = NULL
-    ) +
-    theme_light()
+  ggplot(aes(x = pct, y = curr_ecig |> fct_rev())) +
+  geom_col(
+    # colour = "grey10",
+    fill = "orange3"
+  ) +
+  geom_text(
+    aes(x = 15, 
+        label = str_c(n, " (", format(pct, digits = 1, nsmall = 1), "%)"))
+  ) +
+  labs(
+    x = NULL,
+    y = NULL
+  ) +
+  theme_light()
 
 # Currently use e-cigarette Graph - Polished
 fig_curr_ecig01 <- fig_curr_ecig00 +
-    xlim(0, 100) +
-    theme(
-        # panel.grid = element_blank(),
-        axis.text.x = element_blank(),
-        axis.text.y = element_text(
-            face = "bold",
-            size = rel(1.2)
-        )
+  xlim(0, 100) +
+  theme(
+    # panel.grid = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(
+      face = "bold",
+      size = rel(1.2)
     )
+  )
 fig_curr_ecig01
 
 ```
@@ -1099,62 +1148,37 @@ fig_curr_ecig01
 #| label: data-valuebox-page3
 #| include: false
 
-# PSU Response Rate should actually be calculated from the Interview Status 
-# Codes of Household (survey0) and Individual (survey1) Questionnaires.
-# For a completed Interview both HHCurrentEvent and IQCurrentEvent Codes 
-# should be 200 and 400 respectively
+# PSU Response Rate is calculated from the Interview Status Codes 
+# of Household (survey0) and Individual (survey1) Questionnaires
 df_vb_fiid_rrate <- data_ex_01 |> 
-    # Calculate Count of HHs
-    summarize(
-        tot_cases_n = n(),
-        tot_attempt_hh_n = sum(!is.na(rrate_allq_01)),
-        comp_allq_hh_n = sum(rrate_allq_01, na.rm = T),
-        comp_hhq_hh_n = sum(rrate_hhq_01, na.rm = T),
-        comp_indq_hh_n = sum(rrate_indq_01, na.rm = T),
-    ) |> 
-    # Calculate Response Rate of HHs in %
-    mutate(
-        tot_attempt_pct = tot_attempt_hh_n / tot_cases_n,
-        comp_allq_hh_pct = comp_allq_hh_n / tot_attempt_hh_n,
-        comp_hhq_hh_pct = comp_hhq_hh_n / tot_attempt_hh_n,
-        comp_indq_hh_pct = comp_indq_hh_n / tot_attempt_hh_n
-    ) |> 
-    # Calculate the statistics for displaying in Valuebox
-    mutate(
-        stat_attempt = scales::label_percent()(tot_attempt_pct),
-        stat_trr = scales::label_percent()(comp_allq_hh_pct),
-        stat_hrr = scales::label_percent()(comp_hhq_hh_pct),
-        stat_irr = scales::label_percent()(comp_indq_hh_pct)
-    )
+  # Calculate Count of Completed HQ and IQ
+  summarize(
+    tot_hhq_n = sum(!is.na(rrate_hhq_01)),
+    tot_indq_n = sum(!is.na(rrate_indq_01)),
+    comp_hhq_hh_n = sum(rrate_hhq_01, na.rm = T),
+    comp_indq_hh_n = sum(rrate_indq_01, na.rm = T),
+    ref_rate_hh_n = sum(ref_rate_01, na.rm = T)
+  ) |> 
+  # Calculate Response Rate of HQ, IQ and All in proportion
+  # Calculate Refusal Rate in proportion
+  mutate(
+    comp_hhq_hh_pct = comp_hhq_hh_n / tot_hhq_n,
+    comp_indq_hh_pct = comp_indq_hh_n / tot_indq_n,
+    comp_allq_hh_pct = comp_hhq_hh_pct * comp_indq_hh_pct,
+    ref_rate_hh_pct = ref_rate_hh_n / tot_indq_n
+  ) |> 
+  # Calculate the statistics for displaying in Valuebox
+  mutate(
+    stat_hrr = scales::label_percent(accuracy = 0.1)(comp_hhq_hh_pct),
+    stat_irr = scales::label_percent(accuracy = 0.1)(comp_indq_hh_pct),
+    stat_trr = scales::label_percent(accuracy = 0.1)(comp_allq_hh_pct),
+    stat_ref_rate = scales::label_percent(accuracy = 0.1)(ref_rate_hh_pct),
+  )
 
-attempt_rate <- df_vb_fiid_rrate$stat_attempt
-trr <- df_vb_fiid_rrate$stat_trr
 hrr <- df_vb_fiid_rrate$stat_hrr
 irr <- df_vb_fiid_rrate$stat_irr
-
-```
-
-```{r}
-#| content: valuebox
-#| title: "Interview Attempt Rate"
-
-list(
-  icon = "clipboard-data",
-  color = "info",
-  value = attempt_rate
-)
-
-```
-
-```{r}
-#| content: valuebox
-#| title: "Total Response Rate"
-
-list(
-  icon = "clipboard-check",
-  color = "info",
-  value = trr
-)
+trr <- df_vb_fiid_rrate$stat_trr
+ref_rate <- df_vb_fiid_rrate$stat_ref_rate
 
 ```
 
@@ -1164,7 +1188,7 @@ list(
 
 list(
   icon = "house",
-  color = "info",
+  color = "warning",
   value = hrr
 )
 
@@ -1175,9 +1199,33 @@ list(
 #| title: "IND Response Rate"
 
 list(
-  icon = "person-circle",
-  color = "info",
+  icon = "person-check",
+  color = "warning",
   value = irr
+)
+
+```
+
+```{r}
+#| content: valuebox
+#| title: "Total Response Rate"
+
+list(
+  icon = "clipboard-check",
+  color = "warning",
+  value = trr
+)
+
+```
+
+```{r}
+#| content: valuebox
+#| title: "Person-level Refusal Rate"
+
+list(
+  icon = "person-slash",
+  color = "warning",
+  value = ref_rate
 )
 
 ```
@@ -1194,11 +1242,11 @@ list(
 
 # Crosstab using gtsummary
 data_ex_01 |> 
-    tbl_cross(
-        FIID, final_code_hhq,
-        missing = "no"
-    ) |> 
-    bold_labels()
+  tbl_cross(
+    FIID, final_code_hhq,
+    missing = "no"
+  ) |> 
+  bold_labels()
 
 ```
 
@@ -1210,11 +1258,11 @@ data_ex_01 |>
 
 # Crosstab using gtsummary
 data_ex_01 |> 
-    tbl_cross(
-        FIID, final_code_indq,
-        missing = "no"
-    ) |> 
-    bold_labels()
+  tbl_cross(
+    FIID, final_code_indq,
+    missing = "no"
+  ) |> 
+  bold_labels()
 
 ```
 
@@ -1227,36 +1275,38 @@ data_ex_01 |>
 # Transform the Data for calculating the Response Rate for Overall, 
 # Household and Individual Questionnaire.
 df_fiid_rrate <- data_ex_01 |> 
-    # Group by Field Investigator ID
-    group_by(FIID) |> 
-    # Calculate Count of HHs
-    summarize(
-        tot_hh_n = sum(!is.na(rrate_allq_01)),
-        comp_allq_hh_n = sum(rrate_allq_01, na.rm = T),
-        comp_hhq_hh_n = sum(rrate_hhq_01, na.rm = T),
-        comp_indq_hh_n = sum(rrate_indq_01, na.rm = T),
-    ) |> 
-    # Calculate Response Rate of HHs in %
-    mutate(
-        comp_allq_hh_pct = comp_allq_hh_n / tot_hh_n,
-        comp_hhq_hh_pct = comp_hhq_hh_n / tot_hh_n,
-        comp_indq_hh_pct = comp_indq_hh_n / tot_hh_n
-    ) |> 
-    # Categorical status var of Response Rates
-    # Categorical var with scores as category
-    mutate(rrate_status = case_when(
-        comp_allq_hh_pct >= 0.92 & comp_hhq_hh_pct >= 0.92 & 
-            comp_indq_hh_pct >= 0.98 ~ 3,
-        comp_allq_hh_pct < 0.92 & comp_hhq_hh_pct < 0.92 & 
-            comp_indq_hh_pct < 0.98 ~ 1,
-        .default = 2
-    )) |> 
-    # Convert to factor
-    mutate(rrate_status = factor(
-        rrate_status,
-        levels = c(1, 2, 3),
-        labels = c("Very Bad", "Bad", "Good")
-    ))
+  # Group by Field Investigator ID
+  group_by(FIID) |> 
+  # Calculate Count of HHs
+  summarize(
+    tot_hhq_n = sum(!is.na(rrate_hhq_01)),
+    tot_indq_n = sum(!is.na(rrate_indq_01)),
+    comp_hhq_hh_n = sum(rrate_hhq_01, na.rm = T),
+    comp_indq_hh_n = sum(rrate_indq_01, na.rm = T),
+    ref_rate_hh_n = sum(ref_rate_01, na.rm = T)
+  ) |> 
+  # Calculate Response Rate of HHs in %
+  mutate(
+    comp_hhq_hh_pct = comp_hhq_hh_n / tot_hhq_n,
+    comp_indq_hh_pct = comp_indq_hh_n / tot_indq_n,
+    comp_allq_hh_pct = comp_hhq_hh_pct * comp_indq_hh_pct,
+    ref_rate_hh_pct = ref_rate_hh_n / tot_indq_n
+  ) |> 
+  # Categorical status var of Response Rates
+  # Categorical var with scores as category
+  mutate(rrate_status = case_when(
+    comp_hhq_hh_pct >= 0.92 & comp_indq_hh_pct >= 0.98 & 
+      comp_allq_hh_pct >= 0.92 ~ 3,
+    comp_hhq_hh_pct < 0.92 & comp_indq_hh_pct < 0.98 &  
+      comp_allq_hh_pct < 0.92 ~ 1,
+    .default = 2
+  )) |> 
+  # Convert to factor
+  mutate(rrate_status = factor(
+    rrate_status,
+    levels = c(3, 2, 1),
+    labels = c("Good", "Poor", "Very Poor")
+  ))
 
 ```
 
@@ -1268,54 +1318,52 @@ df_fiid_rrate <- data_ex_01 |>
 
 # View as gt table
 df_fiid_rrate |> 
-    select(FIID, tot_hh_n, comp_allq_hh_pct, comp_hhq_hh_pct, 
-           comp_indq_hh_pct, rrate_status) |> 
-    # Convert data to gt object
-    gt() |> 
-    # Add a formal title
-    # tab_header(title = md("**Field Investigator Response Rates**")) |> 
-    # Add Column labels
-    cols_label(
-        FIID = "FIID",
-        tot_hh_n = html("Interviews <br>Attempted"),
-        comp_allq_hh_pct = "TRR",
-        comp_hhq_hh_pct = "HRR",
-        comp_indq_hh_pct = "IRR",
-        rrate_status = html("Interviewer <br>Performance")
-    ) |> 
-    # Add footnotes for the response rates
-    tab_footnote(
-        footnote = "Total Response Rate, Target >= 92%",
-        locations = cells_column_labels(comp_allq_hh_pct)
-    ) |> 
-    tab_footnote(
-        footnote = "Household Response Rate, Target >= 92%",
-        locations = cells_column_labels(comp_hhq_hh_pct)
-    ) |> 
-    tab_footnote(
-        footnote = "Individual Response Rate, Target >= 98%",
-        locations = cells_column_labels(comp_indq_hh_pct)
-    ) |> 
-    # Add % Symbol
-    fmt_percent(
-        columns = ends_with("_pct"),
-        decimals = 1
-    ) |> 
-    # Use Pill Badges to show Response Rate Status
-    data_color(
-        columns = rrate_status,
-        method = "factor",
-        # domain = c("Very Bad", "Bad", "Good"),
-        palette = c("Very Bad" = "red", 
-                    "Bad" = "orange", 
-                    "Good" = "green3")
-    ) |> 
-    # Add Theme to the gt table 
-    gt_theme_espn() |> 
-    # Make the table interactive    
-    opt_interactive(
-        use_pagination = FALSE
-    )
+  # Keep only the required columns for table
+  select(FIID, ref_rate_hh_pct, comp_hhq_hh_pct, comp_indq_hh_pct, 
+         comp_allq_hh_pct, rrate_status) |> 
+  # Convert data to gt object
+  gt() |> 
+  # Add a formal title
+  # tab_header(title = md("**Field Investigator Response Rates**")) |> 
+  # Add Column labels
+  cols_label(
+    FIID = "FIID",
+    ref_rate_hh_pct = html("Person-level <br>Refusal Rate"),
+    comp_hhq_hh_pct = "HRR",
+    comp_indq_hh_pct = "IRR",
+    comp_allq_hh_pct = "TRR",
+    rrate_status = html("Interviewer <br>Performance")
+  ) |> 
+  # Add footnotes for the response rates
+  tab_footnote(
+    footnote = "Total Response Rate, Target >= 92%",
+    locations = cells_column_labels(comp_allq_hh_pct)
+  ) |> 
+  tab_footnote(
+    footnote = "Household Response Rate, Target >= 92%",
+    locations = cells_column_labels(comp_hhq_hh_pct)
+  ) |> 
+  tab_footnote(
+    footnote = "Individual Response Rate, Target >= 98%",
+    locations = cells_column_labels(comp_indq_hh_pct)
+  ) |> 
+  # Add % Symbol
+  fmt_percent(
+    columns = ends_with("_pct"),
+    decimals = 1
+  ) |> 
+  # Colour Code the Response Rate Status
+  data_color(
+    columns = rrate_status,
+    method = "factor",
+    palette = c("Good" = "green3", 
+                "Poor" = "orange", 
+                "Very Poor" = "red")
+  ) |> 
+  # Add Theme to the gt table 
+  gt_theme_espn() |> 
+  # Make the table interactive    
+  opt_interactive(use_pagination = FALSE)
 
 ```
 

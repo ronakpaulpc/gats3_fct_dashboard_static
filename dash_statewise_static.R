@@ -135,42 +135,70 @@ data_ex_01 <- data_ex_00 |>
     mutate(cons = 1) |> 
     
     # Overall Progress Check - Based on Status Code
-    # Prepare the binary variable for Progress Calculation
-    # Here we set missing as "0" for progress calculation
-    mutate(progress_overall_01 = if_else(
-        HHCurrentEvent == 200 & IQCurrentEvent == 400,
-        1, 0, missing = 0
-    )) |>
+    # Prepare the binary variables for Progress Calculation
+    # NOTE: We set missing as "0" across all variables
+    mutate(
+        progress_all_01 = if_else(
+            HHCurrentEvent >= 200 | IQCurrentEvent >= 400,
+            1, 0, missing = 0
+        ),
+        progress_hh_01 = if_else(
+            HHCurrentEvent >= 200, 1, 0, missing = 0
+        ),
+        progress_ind_01 = if_else(
+            IQCurrentEvent >= 400, 1, 0, missing = 0
+        ),
+        progress_e01_01 = if_else(
+            !is.na(E01), 1, 0, missing = 0
+        )
+    ) |>
     
-    # Response Rate Across Overall, Household and Individual
-    # Questionnaires
-    mutate(rrate_allq_01 = if_else(
-        HHCurrentEvent == 200 & IQCurrentEvent == 400,
-        1, 0, missing = NA
-    )) |>
-    # Progress - Household Questionnaire
-    mutate(rrate_hhq_01 = if_else(
-        HHCurrentEvent == 200,
-        1, 0, missing = NA
-    )) |>
-    # Progress - Individual Questionnaire
-    mutate(rrate_indq_01 = if_else(
-        IQCurrentEvent == 400,
-        1, 0, missing = NA
-    )) |>
+    # Response Rate Across Total, Household and Individual Questionnaires and
+    # Person-level Refusal Rate computed based on 
+    # GATS QUALITY ASSURANCE MANUAL Page 44-45
+    # Keep only the relevant Codes for HH and IND Surveys
+    mutate(
+        hh_curr_event_6c = if_else(
+            !(HHCurrentEvent %in% c(200, 202, 203, 209, 204, 208)),
+            NA, HHCurrentEvent, missing = NA
+        ),
+        ind_curr_event_6c = if_else(
+            !(IQCurrentEvent %in% c(400, 402, 409, 404, 407, 408)),
+            NA, IQCurrentEvent, missing = NA
+        )
+    ) |> 
+    # Prepare binary variables for HH, IND Surveys and Refusal Rate
+    # Will use this to sum by PSU and get the response rates
+    mutate(
+        # Progress - Household Questionnaire
+        rrate_hhq_01 = if_else(
+            HHCurrentEvent == 200,
+            1, 0, missing = NA
+        ),
+        # Progress - Individual Questionnaire
+        rrate_indq_01 = if_else(
+            IQCurrentEvent == 400,
+            1, 0, missing = NA
+        ),
+        # Person-level Refusal Rate
+        ref_rate_01 = if_else(
+            IQCurrentEvent == 404,
+            1, 0, missing = NA
+        )
+    ) |>
     
     # Final Survey Codes - Recode Pending Codes into Single Category
-    # Recategorize HH Questionnaire
+    # Recategorize HH Questionnaire - Codes <200 is "Pending"
     mutate(final_code_hhq = if_else(
         HHCurrentEvent < 200, 
         "Pending", as.character(HHCurrentEvent), missing = NA
     )) |> 
-    # Recategorize IND Questionnaire
+    # Recategorize IND Questionnaire - Codes < 400 is "Pending"
     mutate(final_code_indq = if_else(
         IQCurrentEvent < 400,
         "Pending", as.character(IQCurrentEvent), missing = NA
     )) |> 
-    # Convert to Factor
+    # Convert to Factor for showing all values in crosstab
     mutate(
         final_code_hhq = factor(
             final_code_hhq, 
@@ -271,6 +299,23 @@ data_ex_01 <- data_ex_00 |>
 
 
 # ** Variable checks ------------------------------------------------------
+# Please Check the variables after data preparation
+# Frequency - Overall progress
+data_ex_01 |> tabyl(progress_all_01)
+data_ex_01 |> tabyl(progress_hh_01)
+data_ex_01 |> tabyl(progress_ind_01)
+data_ex_01 |> tabyl(progress_e01_01)
+
+# Crosstab - 6 Category Final Codes with All Final Codes
+data_ex_01 |> tabyl(HHCurrentEvent, hh_curr_event_6c)
+data_ex_01 |> tabyl(IQCurrentEvent, ind_curr_event_6c)
+data_ex_01 |> tabyl(hh_curr_event_6c, rrate_hhq_01)
+data_ex_01 |> tabyl(ind_curr_event_6c, rrate_indq_01)
+data_ex_01 |> tabyl(ind_curr_event_6c, ref_rate_01)
+# Frequency - Binary Completion Code
+data_ex_01 |> tabyl(rrate_hhq_01, show_na = F)
+data_ex_01 |> tabyl(rrate_indq_01, show_na = F)
+data_ex_01 |> tabyl(ref_rate_01, show_na = F)
 
 # Check - Questionnaire Final Code Recode
 # All pending codes should be categorized as "Pending" and all NA should 
@@ -319,11 +364,11 @@ data_progress_dist <- data_ex_01 |>
     # Calculate the Total and Completed Cases across districts
     summarize(
         tot_hh_n = sum(cons),
-        comp_hh_n = sum(progress_overall_01)
+        comp_hh_n = sum(progress_all_01)
     ) |> 
     # Calculate Number of Districts Completed
     mutate(progress_dist_01 = if_else(
-        tot_hh_n == comp_hh_n, 
+        comp_hh_n >= 30, 
         1, 0, missing = 0
     )) |> 
     # Calculate overall stats of Districts
@@ -349,14 +394,14 @@ data_progress_dist$stat_dist
 data_progress_psu <- data_ex_01 |> 
     # Group by PSUs
     group_by(DATA02) |> 
-    # Calculate the Total and Completed Cases across districts
+    # Calculate the Total and Completed Cases across PSUs
     summarize(
         tot_hh_n = sum(cons),
-        comp_hh_n = sum(progress_overall_01)
+        comp_hh_n = sum(progress_all_01)
     ) |> 
     # Calculate Number of PSUs Completed
     mutate(progress_psu_01 = if_else(
-        tot_hh_n == comp_hh_n, 
+        comp_hh_n >= 30, 
         1, 0, missing = 0
     )) |> 
     # Calculate overall stats of PSUs
@@ -380,12 +425,12 @@ data_progress_psu$stat_psu
 # Transform the Data Overall for Interview Progress calculation Across
 # ALL HOUSEHOLDS
 data_progress_hh <- data_ex_01 |> 
-    # Calculate Total and Completed Cases
+    # Calculate Total and Completed HH Interviews
     summarize(
         tot_hh_n = sum(cons),
-        comp_hh_n = sum(progress_overall_01)
+        comp_hh_n = sum(progress_hh_01)
     ) |> 
-    # Calculate Percentage of Completed Cases
+    # Calculate Percentage of Completed HH Interviews
     mutate(pct_hh = (comp_hh_n / tot_hh_n)) |> 
     # This converts the stat to string, which we don't want
     # mutate(cases_pct = format(cases_pct))
@@ -397,9 +442,34 @@ data_progress_hh <- data_ex_01 |>
         ")"
     ))
 # Check Progress
-data_ex_01 |> tabyl(progress_overall_01)
+data_ex_01 |> tabyl(progress_hh_01)
 data_progress_hh
 data_progress_hh$stat_hh
+
+# Transform the Data Overall for Interview Progress calculation Across
+# ALL INDIVIDUALS
+# NOTE: CALCULATED BASED ON E01 IS NOT MISSING
+data_progress_ind <- data_ex_01 |> 
+    # Calculate Total and Completed IND Interviews
+    summarize(
+        tot_ind_n = sum(cons),
+        comp_ind_n = sum(progress_e01_01)
+    ) |> 
+    # Calculate Percentage of Completed IND Interviews
+    mutate(pct_ind = (comp_ind_n / tot_ind_n)) |> 
+    # This converts the stat to string, which we don't want
+    # mutate(cases_pct = format(cases_pct))
+    # Prepare the Progress Display Statistics in N (%)
+    mutate(stat_ind = str_c(
+        comp_ind_n, 
+        " (", 
+        scales::label_percent()(pct_ind),
+        ")"
+    ))
+# Check Progress
+data_ex_01 |> tabyl(progress_e01_01)
+data_progress_ind
+data_progress_ind$stat_ind
 
 # Estimate the Consent refusal rate
 data_consent <- data_ex_01 |> 
@@ -481,7 +551,7 @@ df_tbl_progress_dist <- data_ex_01 |>
     # Calculate the Total and Completed Cases across Districts
     summarize(
         tot_hh_n = sum(cons),
-        comp_hh_n = sum(progress_overall_01)
+        comp_hh_n = sum(progress_all_01)
     ) |> 
     # Calculate Prop and % of HHs Completed across Districts
     mutate(
@@ -520,7 +590,7 @@ df_tbl_progress_psu <- data_ex_01 |>
     # Calculate the Total and Completed Cases across Districts
     summarize(
         tot_hh_n = sum(cons),
-        comp_hh_n = sum(progress_overall_01)
+        comp_hh_n = sum(progress_all_01)
     ) |> 
     # Calculate Prop and % of HHs Completed across Districts
     mutate(
@@ -1078,33 +1148,34 @@ data_ex_00 |> tabyl(WP5)
 # For a completed Interview both HHCurrentEvent and IQCurrentEvent Codes 
 # should be 200 and 400 respectively
 df_vb_fiid_rrate <- data_ex_01 |> 
-    # Calculate Count of HHs
+    # Calculate Count of Completed HQ and IQ
     summarize(
-        tot_cases_n = n(),
-        tot_attempt_hh_n = sum(!is.na(rrate_allq_01)),
-        comp_allq_hh_n = sum(rrate_allq_01, na.rm = T),
+        tot_hhq_n = sum(!is.na(rrate_hhq_01)),
+        tot_indq_n = sum(!is.na(rrate_indq_01)),
         comp_hhq_hh_n = sum(rrate_hhq_01, na.rm = T),
         comp_indq_hh_n = sum(rrate_indq_01, na.rm = T),
+        ref_rate_hh_n = sum(ref_rate_01, na.rm = T)
     ) |> 
-    # Calculate Response Rate of HHs in %
+    # Calculate Response Rate of HQ, IQ and All in proportion
+    # Calculate Refusal Rate in proportion
     mutate(
-        tot_attempt_pct = tot_attempt_hh_n / tot_cases_n,
-        comp_allq_hh_pct = comp_allq_hh_n / tot_attempt_hh_n,
-        comp_hhq_hh_pct = comp_hhq_hh_n / tot_attempt_hh_n,
-        comp_indq_hh_pct = comp_indq_hh_n / tot_attempt_hh_n
+        comp_hhq_hh_pct = comp_hhq_hh_n / tot_hhq_n,
+        comp_indq_hh_pct = comp_indq_hh_n / tot_indq_n,
+        comp_allq_hh_pct = comp_hhq_hh_pct * comp_indq_hh_pct,
+        ref_rate_hh_pct = ref_rate_hh_n / tot_indq_n
     ) |> 
     # Calculate the statistics for displaying in Valuebox
     mutate(
-        stat_attempt = scales::label_percent()(tot_attempt_pct),
-        stat_trr = scales::label_percent()(comp_allq_hh_pct),
-        stat_hrr = scales::label_percent()(comp_hhq_hh_pct),
-        stat_irr = scales::label_percent()(comp_indq_hh_pct)
+        stat_hrr = scales::label_percent(accuracy = 0.1)(comp_hhq_hh_pct),
+        stat_irr = scales::label_percent(accuracy = 0.1)(comp_indq_hh_pct),
+        stat_trr = scales::label_percent(accuracy = 0.1)(comp_allq_hh_pct),
+        stat_ref_rate = scales::label_percent(accuracy = 0.1)(ref_rate_hh_pct),
     )
 # Check the stats
-df_vb_fiid_rrate$stat_attempt
-df_vb_fiid_rrate$stat_trr
 df_vb_fiid_rrate$stat_hrr
 df_vb_fiid_rrate$stat_irr
+df_vb_fiid_rrate$stat_trr
+df_vb_fiid_rrate$stat_ref_rate
 
 
 # ** Response Rate Table --------------------------------------------------
@@ -1115,39 +1186,41 @@ df_fiid_rrate <- data_ex_01 |>
     group_by(FIID) |> 
     # Calculate Count of HHs
     summarize(
-        tot_attempt_hh_n = sum(!is.na(rrate_allq_01)),
-        comp_allq_hh_n = sum(rrate_allq_01, na.rm = T),
+        tot_hhq_n = sum(!is.na(rrate_hhq_01)),
+        tot_indq_n = sum(!is.na(rrate_indq_01)),
         comp_hhq_hh_n = sum(rrate_hhq_01, na.rm = T),
         comp_indq_hh_n = sum(rrate_indq_01, na.rm = T),
+        ref_rate_hh_n = sum(ref_rate_01, na.rm = T)
     ) |> 
     # Calculate Response Rate of HHs in %
     mutate(
-        comp_allq_hh_pct = comp_allq_hh_n / tot_attempt_hh_n,
-        comp_hhq_hh_pct = comp_hhq_hh_n / tot_attempt_hh_n,
-        comp_indq_hh_pct = comp_indq_hh_n / tot_attempt_hh_n
+        comp_hhq_hh_pct = comp_hhq_hh_n / tot_hhq_n,
+        comp_indq_hh_pct = comp_indq_hh_n / tot_indq_n,
+        comp_allq_hh_pct = comp_hhq_hh_pct * comp_indq_hh_pct,
+        ref_rate_hh_pct = ref_rate_hh_n / tot_indq_n
     ) |> 
     # Categorical status var of Response Rates
     # Categorical var with scores as category
     mutate(rrate_status = case_when(
-        comp_allq_hh_pct >= 0.92 & comp_hhq_hh_pct >= 0.92 & 
-            comp_indq_hh_pct >= 0.98 ~ 3,
-        comp_allq_hh_pct < 0.92 & comp_hhq_hh_pct < 0.92 & 
-            comp_indq_hh_pct < 0.98 ~ 1,
+        comp_hhq_hh_pct >= 0.92 & comp_indq_hh_pct >= 0.98 & 
+            comp_allq_hh_pct >= 0.92 ~ 3,
+        comp_hhq_hh_pct < 0.92 & comp_indq_hh_pct < 0.98 &  
+            comp_allq_hh_pct < 0.92 ~ 1,
         .default = 2
     )) |> 
     # Convert to factor
     mutate(rrate_status = factor(
         rrate_status,
-        levels = c(1, 2, 3),
-        labels = c("Very Bad", "Bad", "Good")
+        levels = c(3, 2, 1),
+        labels = c("Good", "Poor", "Very Poor")
     ))
 
 # Check table
 df_fiid_rrate |> select(-ends_with("_n"))
 # View as gt table
 df_fiid_rrate |> 
-    select(FIID, tot_attempt_hh_n, comp_allq_hh_pct, comp_hhq_hh_pct, 
-           comp_indq_hh_pct, rrate_status) |> 
+    select(FIID, ref_rate_hh_pct, comp_hhq_hh_pct, comp_indq_hh_pct, 
+           comp_allq_hh_pct, rrate_status) |> 
     # Convert data to gt object
     gt() |> 
     # Add a formal title
@@ -1155,10 +1228,10 @@ df_fiid_rrate |>
     # Add Column labels
     cols_label(
         FIID = "FIID",
-        tot_attempt_hh_n = html("Interviews <br>Attempted"),
-        comp_allq_hh_pct = "TRR",
+        ref_rate_hh_pct = html("Person-level <br>Refusal Rate"),
         comp_hhq_hh_pct = "HRR",
         comp_indq_hh_pct = "IRR",
+        comp_allq_hh_pct = "TRR",
         rrate_status = html("Interviewer <br>Performance")
     ) |> 
     # Add footnotes for the response rates
@@ -1179,21 +1252,18 @@ df_fiid_rrate |>
         columns = ends_with("_pct"),
         decimals = 1
     ) |> 
-    # Use Pill Badges to show Response Rate Status
+    # Colour Code the Response Rate Status
     data_color(
         columns = rrate_status,
         method = "factor",
-        # domain = c("Very Bad", "Bad", "Good"),
-        palette = c("Very Bad" = "red", 
-                    "Bad" = "orange", 
-                    "Good" = "green3")
+        palette = c("Good" = "green3", 
+                    "Poor" = "orange", 
+                    "Very Poor" = "red")
     ) |> 
     # Add Theme to the gt table 
     gt_theme_espn() |> 
     # Make the table interactive    
-    opt_interactive(
-        use_pagination = FALSE
-    )
+    opt_interactive(use_pagination = FALSE)
 
 
 # ** HH Survey Code by FIID -----------------------------------------------
