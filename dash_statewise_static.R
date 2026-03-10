@@ -154,7 +154,7 @@ data_ex_01 <- data_ex_00 |>
     ) |>
     
     # Response Rate Across Total, Household and Individual Questionnaires and
-    # Person-level Refusal Rate computed based on 
+    # Person-level Refusal Rate computed based on
     # GATS QUALITY ASSURANCE MANUAL Page 44-45
     # Keep only the relevant Codes for HH and IND Surveys
     mutate(
@@ -194,9 +194,10 @@ data_ex_01 <- data_ex_00 |>
         "Pending", as.character(HHCurrentEvent), missing = NA
     )) |> 
     # Recategorize IND Questionnaire - Codes < 400 is "Pending"
-    mutate(final_code_indq = if_else(
-        IQCurrentEvent < 400,
-        "Pending", as.character(IQCurrentEvent), missing = NA
+    mutate(final_code_indq = case_when(
+        IQCurrentEvent < 400 ~ "Pending",
+        final_code_hhq == 200 & is.na(CONSENT6) ~ "Unopened",
+        .default = as.character(IQCurrentEvent)
     )) |> 
     # Convert to Factor for showing all values in crosstab
     mutate(
@@ -208,7 +209,7 @@ data_ex_01 <- data_ex_00 |>
         final_code_indq = factor(
             final_code_indq,
             levels = c("400", "402", "403", "404", "407", "408", "409",
-                       "Pending")
+                       "Unopened", "Pending")
         )
     ) |> 
     
@@ -320,8 +321,14 @@ data_ex_01 |> tabyl(ref_rate_01, show_na = F)
 # Check - Questionnaire Final Code Recode
 # All pending codes should be categorized as "Pending" and all NA should 
 # be NA
+# Frequency
+data_ex_01 |> tabyl(final_code_hhq)
+data_ex_01 |> tabyl(final_code_indq)
+# Crosstab
 data_ex_01 |> tabyl(HHCurrentEvent, final_code_hhq)
 data_ex_01 |> tabyl(IQCurrentEvent, final_code_indq)
+# Check Unopened Cases
+data_ex_01 |> tabyl(HHCurrentEvent, final_code_indq)
 
 
 # ** Variable labels ------------------------------------------------------

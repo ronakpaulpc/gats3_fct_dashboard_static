@@ -138,172 +138,173 @@ data_ex_00 <- read_csv(here("data_tablet_it", "gats3_flatfile_hp_260219.csv"))
 # Here we prepare the dataset by mutating custom variables needed for 
 # preparing the Dashboard.
 data_ex_01 <- data_ex_00 |> 
-  
-  # Constant
-  mutate(cons = 1) |> 
-  
-  # Overall Progress Check - Based on Status Code
-  # Prepare the binary variables for Progress Calculation
-  # NOTE: We set missing as "0" across all variables
-  mutate(
-    progress_all_01 = if_else(
-      HHCurrentEvent >= 200 | IQCurrentEvent >= 400,
-      1, 0, missing = 0
+    
+    # Constant
+    mutate(cons = 1) |> 
+    
+    # Overall Progress Check - Based on Status Code
+    # Prepare the binary variables for Progress Calculation
+    # NOTE: We set missing as "0" across all variables
+    mutate(
+        progress_all_01 = if_else(
+            HHCurrentEvent >= 200 | IQCurrentEvent >= 400,
+            1, 0, missing = 0
+        ),
+        progress_hh_01 = if_else(
+            HHCurrentEvent >= 200, 1, 0, missing = 0
+        ),
+        progress_ind_01 = if_else(
+            IQCurrentEvent >= 400, 1, 0, missing = 0
+        ),
+        progress_e01_01 = if_else(
+            !is.na(E01), 1, 0, missing = 0
+        )
+    ) |>
+    
+    # Response Rate Across Total, Household and Individual Questionnaires and
+    # Person-level Refusal Rate computed based on
+    # GATS QUALITY ASSURANCE MANUAL Page 44-45
+    # Keep only the relevant Codes for HH and IND Surveys
+    mutate(
+        hh_curr_event_6c = if_else(
+            !(HHCurrentEvent %in% c(200, 202, 203, 209, 204, 208)),
+            NA, HHCurrentEvent, missing = NA
+        ),
+        ind_curr_event_6c = if_else(
+            !(IQCurrentEvent %in% c(400, 402, 409, 404, 407, 408)),
+            NA, IQCurrentEvent, missing = NA
+        )
+    ) |> 
+    # Prepare binary variables for HH, IND Surveys and Refusal Rate
+    # Will use this to sum by PSU and get the response rates
+    mutate(
+        # Progress - Household Questionnaire
+        rrate_hhq_01 = if_else(
+            HHCurrentEvent == 200,
+            1, 0, missing = NA
+        ),
+        # Progress - Individual Questionnaire
+        rrate_indq_01 = if_else(
+            IQCurrentEvent == 400,
+            1, 0, missing = NA
+        ),
+        # Person-level Refusal Rate
+        ref_rate_01 = if_else(
+            IQCurrentEvent == 404,
+            1, 0, missing = NA
+        )
+    ) |>
+    
+    # Final Survey Codes - Recode Pending Codes into Single Category
+    # Recategorize HH Questionnaire - Codes <200 is "Pending"
+    mutate(final_code_hhq = if_else(
+        HHCurrentEvent < 200, 
+        "Pending", as.character(HHCurrentEvent), missing = NA
+    )) |> 
+    # Recategorize IND Questionnaire - Codes < 400 is "Pending"
+    mutate(final_code_indq = case_when(
+        IQCurrentEvent < 400 ~ "Pending",
+        final_code_hhq == 200 & is.na(CONSENT6) ~ "Unopened",
+        .default = as.character(IQCurrentEvent)
+    )) |> 
+    # Convert to Factor for showing all values in crosstab
+    mutate(
+        final_code_hhq = factor(
+            final_code_hhq, 
+            levels = c("200", "201", "202", "203", "204", "205", "206",
+                       "208", "209", "999", "Pending")
+        ),
+        final_code_indq = factor(
+            final_code_indq,
+            levels = c("400", "402", "403", "404", "407", "408", "409",
+                       "Unopened", "Pending")
+        )
+    ) |> 
+    
+    # Overall Progress Check - Based on Consent
+    mutate(consent_part = if_else(CONSENT6 == 1, 1, 0, missing = 0)) |> 
+    mutate(consent_part_fct = factor(
+        consent_part, 
+        levels = c(0, 1),
+        labels = c("Remaining", "Completed")
+    )) |> 
+    
+    # Age Distribution [5-year age groups]
+    mutate(age5c = case_when(
+        RSAGE < 15 ~ "14 & Below",
+        RSAGE >=15 & RSAGE <=19 ~ "15-19",
+        RSAGE >=20 & RSAGE <=24 ~ "20-24",
+        RSAGE >=25 & RSAGE <=29 ~ "25-29",
+        RSAGE >=30 & RSAGE <=34 ~ "30-34",
+        RSAGE >=35 & RSAGE <=39 ~ "35-39",
+        RSAGE >=40 & RSAGE <=44 ~ "40-44",
+        RSAGE >=45 & RSAGE <=49 ~ "45-49",
+        RSAGE >=50 & RSAGE <=54 ~ "50-54",
+        RSAGE >=55 & RSAGE <=59 ~ "55-59",
+        RSAGE >=60 & RSAGE <=64 ~ "60-64",
+        RSAGE >=65 & RSAGE <=69 ~ "65-69",
+        RSAGE >=70 & RSAGE <=74 ~ "70-74",
+        RSAGE >=75 & RSAGE <=79 ~ "75-79",
+        RSAGE >= 80 ~ "80+"
     ),
-    progress_hh_01 = if_else(
-      HHCurrentEvent >= 200, 1, 0, missing = 0
-    ),
-    progress_ind_01 = if_else(
-      IQCurrentEvent >= 400, 1, 0, missing = 0
-    ),
-    progress_e01_01 = if_else(
-      !is.na(E01), 1, 0, missing = 0
-    )
-  ) |>
-  
-  # Response Rate Across Total, Household and Individual Questionnaires and
-  # Person-level Refusal Rate computed based on 
-  # GATS QUALITY ASSURANCE MANUAL Page 44-45
-  # Keep only the relevant Codes for HH and IND Surveys
-  mutate(
-    hh_curr_event_6c = if_else(
-      !(HHCurrentEvent %in% c(200, 202, 203, 209, 204, 208)),
-      NA, HHCurrentEvent, missing = NA
-    ),
-    ind_curr_event_6c = if_else(
-      !(IQCurrentEvent %in% c(400, 402, 409, 404, 407, 408)),
-      NA, IQCurrentEvent, missing = NA
-    )
-  ) |> 
-  # Prepare binary variables for HH, IND Surveys and Refusal Rate
-  # Will use this to sum by PSU and get the response rates
-  mutate(
-    # Progress - Household Questionnaire
-    rrate_hhq_01 = if_else(
-      HHCurrentEvent == 200,
-      1, 0, missing = NA
-    ),
-    # Progress - Individual Questionnaire
-    rrate_indq_01 = if_else(
-      IQCurrentEvent == 400,
-      1, 0, missing = NA
-    ),
-    # Person-level Refusal Rate
-    ref_rate_01 = if_else(
-      IQCurrentEvent == 404,
-      1, 0, missing = NA
-    )
-  ) |>
-  
-  # Final Survey Codes - Recode Pending Codes into Single Category
-  # Recategorize HH Questionnaire - Codes <200 is "Pending"
-  mutate(final_code_hhq = if_else(
-    HHCurrentEvent < 200, 
-    "Pending", as.character(HHCurrentEvent), missing = NA
-  )) |> 
-  # Recategorize IND Questionnaire - Codes < 400 is "Pending"
-  mutate(final_code_indq = if_else(
-    IQCurrentEvent < 400,
-    "Pending", as.character(IQCurrentEvent), missing = NA
-  )) |> 
-  # Convert to Factor for showing all values in crosstab
-  mutate(
-    final_code_hhq = factor(
-      final_code_hhq, 
-      levels = c("200", "201", "202", "203", "204", "205", "206",
-                 "208", "209", "999", "Pending")
-    ),
-    final_code_indq = factor(
-      final_code_indq,
-      levels = c("400", "402", "403", "404", "407", "408", "409",
-                 "Pending")
-    )
-  ) |> 
-  
-  # Overall Progress Check - Based on Consent
-  mutate(consent_part = if_else(CONSENT6 == 1, 1, 0, missing = 0)) |> 
-  mutate(consent_part_fct = factor(
-    consent_part, 
-    levels = c(0, 1),
-    labels = c("Remaining", "Completed")
-  )) |> 
-  
-  # Age Distribution [5-year age groups]
-  mutate(age5c = case_when(
-    RSAGE < 15 ~ "14 & Below",
-    RSAGE >=15 & RSAGE <=19 ~ "15-19",
-    RSAGE >=20 & RSAGE <=24 ~ "20-24",
-    RSAGE >=25 & RSAGE <=29 ~ "25-29",
-    RSAGE >=30 & RSAGE <=34 ~ "30-34",
-    RSAGE >=35 & RSAGE <=39 ~ "35-39",
-    RSAGE >=40 & RSAGE <=44 ~ "40-44",
-    RSAGE >=45 & RSAGE <=49 ~ "45-49",
-    RSAGE >=50 & RSAGE <=54 ~ "50-54",
-    RSAGE >=55 & RSAGE <=59 ~ "55-59",
-    RSAGE >=60 & RSAGE <=64 ~ "60-64",
-    RSAGE >=65 & RSAGE <=69 ~ "65-69",
-    RSAGE >=70 & RSAGE <=74 ~ "70-74",
-    RSAGE >=75 & RSAGE <=79 ~ "75-79",
-    RSAGE >= 80 ~ "80+"
-  ),
-  age5c = factor(
-    age5c,
-    levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44",
-               "45-49", "50-54", "55-59", "60-64", "65-69", "70-74",
-               "75-79", "80+")
-  )) |> 
-  # Gender Distribution Check
-  mutate(gender = factor(
-    A01,
-    levels = c(1, 2, 3),
-    labels = c("Male", "Female", "Other")
-  )) |> 
-  mutate(gender_fm = if_else(A01 == 1, 1, 0, missing = NA)) |> 
-  mutate(gender_fm = factor(
-    gender, 
-    levels = c(0, 1), 
-    labels = c("Female", "Male")
-  )) |> 
-  # Currently Smoke Tobacco Prevalence Check
-  mutate(curr_smoke = factor(
-    B01,
-    levels = c(1, 2, 3, -7, -9),
-    labels = c("Daily", "Less than Daily", "Not at all", 
-               "Don't know", "Refused")
-  )) |>
-  # Currently Smokeless Tobacco Prevalence Check
-  mutate(curr_smokeless = factor(
-    C01,
-    levels = c(1, 2, 3, -7, -9),
-    labels = c("Daily", "Less than Daily", "Not at all", 
-               "Don't know", "Refused")
-  )) |>
-  # Heard/Seen E-cigarette Check
-  mutate(seen_ecig = factor(
-    EC1,
-    levels = c(1, 2, -9),
-    labels = c("Yes", "No", "Refused")
-  )) |> 
-  # Currently Use E-cigarette Check
-  mutate(curr_ecig = factor(
-    EC2,
-    levels = c(1, 2, 3, -7, -9),
-    labels = c("Daily", "Less than Daily", "Not at all", 
-               "Don't know", "Refused")
-  )) |> 
-  
-  # Consume Paan masala without tobacco
-  mutate(paan_wotob = factor(
-    CC1,
-    levels = c(1, 2, -9),
-    labels = c("Yes", "No", "Refused")
-  )) |> 
-  # Consume Areca nut without tobacco
-  mutate(areca_nut = factor(
-    CC5,
-    levels = c(1, 2, -9),
-    labels = c("Yes", "No", "Refused")
-  ))
+    age5c = factor(
+        age5c,
+        levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44",
+                   "45-49", "50-54", "55-59", "60-64", "65-69", "70-74",
+                   "75-79", "80+")
+    )) |> 
+    # Gender Distribution Check
+    mutate(gender = factor(
+        A01,
+        levels = c(1, 2, 3),
+        labels = c("Male", "Female", "Other")
+    )) |> 
+    mutate(gender_fm = if_else(A01 == 1, 1, 0, missing = NA)) |> 
+    mutate(gender_fm = factor(
+        gender, 
+        levels = c(0, 1), 
+        labels = c("Female", "Male")
+    )) |> 
+    # Currently Smoke Tobacco Prevalence Check
+    mutate(curr_smoke = factor(
+        B01,
+        levels = c(1, 2, 3, -7, -9),
+        labels = c("Daily", "Less than Daily", "Not at all", 
+                   "Don't know", "Refused")
+    )) |>
+    # Currently Smokeless Tobacco Prevalence Check
+    mutate(curr_smokeless = factor(
+        C01,
+        levels = c(1, 2, 3, -7, -9),
+        labels = c("Daily", "Less than Daily", "Not at all", 
+                   "Don't know", "Refused")
+    )) |>
+    # Heard/Seen E-cigarette Check
+    mutate(seen_ecig = factor(
+        EC1,
+        levels = c(1, 2, -9),
+        labels = c("Yes", "No", "Refused")
+    )) |> 
+    # Currently Use E-cigarette Check
+    mutate(curr_ecig = factor(
+        EC2,
+        levels = c(1, 2, 3, -7, -9),
+        labels = c("Daily", "Less than Daily", "Not at all", 
+                   "Don't know", "Refused")
+    )) |> 
+    
+    # Consume Paan masala without tobacco
+    mutate(paan_wotob = factor(
+        CC1,
+        levels = c(1, 2, -9),
+        labels = c("Yes", "No", "Refused")
+    )) |> 
+    # Consume Areca nut without tobacco
+    mutate(areca_nut = factor(
+        CC5,
+        levels = c(1, 2, -9),
+        labels = c("Yes", "No", "Refused")
+    ))
 
 ```
 
