@@ -329,6 +329,7 @@ data_ex_01 |> tabyl(HHCurrentEvent, final_code_hhq)
 data_ex_01 |> tabyl(IQCurrentEvent, final_code_indq)
 # Check Unopened Cases
 data_ex_01 |> tabyl(HHCurrentEvent, final_code_indq)
+data_ex_01 |> tabyl(HHCurrentEvent, CONSENT6)
 
 
 # ** Variable labels ------------------------------------------------------
@@ -361,21 +362,32 @@ data_ex_01 <- data_ex_01 |>
 # PSU Progress should actually be calculated from the Interview Status Codes 
 # of Household (survey0) and Individual (survey1) Questionnaires.
 # For a completed Interview both HHCurrentEvent and IQCurrentEvent Codes 
-# should be 200 and 400 respectively
+# should have final codes of 200+ and 400+ respectively
 
-# Transform the Data Overall for Interview Progress calculation Across
+# Transform the Data Overall for Interview Progress calculation across
 # ALL DISTRICTS
 data_progress_dist <- data_ex_01 |> 
-    # Group by Districts
-    group_by(DATA04) |> 
-    # Calculate the Total and Completed Cases across districts
+    # Group by Districts and PSUs
+    group_by(DATA04, DATA02) |> 
+    # Calculate the Total and Completed Cases across PSUs
     summarize(
         tot_hh_n = sum(cons),
-        comp_hh_n = sum(progress_all_01)
+        comp_hh_n = sum(progress_all_01),
+        .groups = "drop_last"
     ) |> 
-    # Calculate Number of Districts Completed
-    mutate(progress_dist_01 = if_else(
+    # Calculate Number of PSUs Completed
+    mutate(progress_psu_01 = if_else(
         comp_hh_n >= 30, 
+        1, 0, missing = 0
+    )) |> 
+    # Calculate the Total and Completed PSUs across Districts
+    summarize(
+        tot_psu_n = n(),
+        comp_psu_n = sum(progress_psu_01)
+    ) |> 
+    # Calculate Num of Districts Completed
+    mutate(progress_dist_01 = if_else(
+        tot_psu_n == comp_psu_n,
         1, 0, missing = 0
     )) |> 
     # Calculate overall stats of Districts
@@ -430,7 +442,7 @@ data_progress_psu
 data_progress_psu$stat_psu
 
 # Transform the Data Overall for Interview Progress calculation Across
-# ALL HOUSEHOLDS
+# ALL HOUSEHOLD INTERVIEWS
 data_progress_hh <- data_ex_01 |> 
     # Calculate Total and Completed HH Interviews
     summarize(
@@ -454,7 +466,7 @@ data_progress_hh
 data_progress_hh$stat_hh
 
 # Transform the Data Overall for Interview Progress calculation Across
-# ALL INDIVIDUALS
+# ALL INDIVIDUAL INTERVIEWS
 # NOTE: CALCULATED BASED ON E01 IS NOT MISSING
 data_progress_ind <- data_ex_01 |> 
     # Calculate Total and Completed IND Interviews
@@ -478,7 +490,8 @@ data_ex_01 |> tabyl(progress_e01_01)
 data_progress_ind
 data_progress_ind$stat_ind
 
-# Estimate the Consent refusal rate
+# NA - Estimate the Consent refusal rate
+# NOTE: NOT USED IN DASHBOARD
 data_consent <- data_ex_01 |> 
     tabyl(CONSENT6) |> 
     filter(CONSENT6 == 2) |> 
@@ -493,7 +506,8 @@ data_consent <- data_ex_01 |>
 data_consent$n_consent
 
 
-# ** Overall Progress Check -----------------------------------------------
+# ** NA - Overall Progress Check -------------------------------------------
+# NOTE: NOT USED IN DASHBOARD
 # Overall Progress comes from CONSENT6 var
 # Consent distribution table - raw data
 data_ex_00 |> tabyl(CONSENT6)
@@ -553,78 +567,133 @@ fig_op01
 # Transform the Data Overall for Interview Progress calculation Across
 # ALL DISTRICTS
 df_tbl_progress_dist <- data_ex_01 |> 
-    # Group by Districts
-    group_by(DATA04) |> 
-    # Calculate the Total and Completed Cases across Districts
+    # Group by Districts and PSUs
+    group_by(DATA04, DATA02) |> 
+    # Calculate the Total and Completed Cases across PSUs
     summarize(
         tot_hh_n = sum(cons),
-        comp_hh_n = sum(progress_all_01)
+        comp_hh_n = sum(progress_all_01),
+        .groups = "drop_last"
     ) |> 
-    # Calculate Prop and % of HHs Completed across Districts
-    mutate(
-        prop_hh = comp_hh_n / tot_hh_n,
-        pct_hh = scales::label_percent()(prop_hh)
-    )
+    # Calculate Number of PSUs Completed
+    mutate(progress_psu_01 = if_else(
+        comp_hh_n >= 30, 
+        1, 0, missing = 0
+    )) |> 
+    # Calculate the Total and Completed PSUs across Districts
+    summarize(
+        tot_psu_n = n(),
+        comp_psu_n = sum(progress_psu_01),
+        tot_hh_in_dist_n = sum(tot_hh_n),
+        comp_hh_in_dist_n = sum(comp_hh_n)
+    ) |> 
+    # Calculate the HH Completion Percentage
+    mutate(comp_hh_pct = comp_hh_in_dist_n / tot_hh_in_dist_n) |> 
+    # Calculate the PSU Completion Percentage
+    mutate(comp_psu_pct = comp_psu_n / tot_psu_n, .after = comp_psu_n)
 
 # Check table
-df_tbl_progress_dist
+df_tbl_progress_dist |> view(title = "chk")
 # View as DT table
 datatable(
     df_tbl_progress_dist |> select(-prop_hh),
     colnames = c("Districts", "Total HHs", "Completed HHs", "Completion Rate")
 )
 # View as gt table
-df_tbl_progress_dist |> select(-prop_hh) |> 
+df_tbl_progress_dist |> 
     gt() |> 
+    fmt_percent(ends_with("pct"), decimals = 1) |> 
     cols_label(
         DATA04 = "District Name",
-        tot_hh_n = "Total HHs",
-        comp_hh_n = "Completed HHs",
-        pct_hh = "Completion Rate"
+        tot_psu_n = "Total PSUs",
+        comp_psu_n = "Completed PSUs",
+        comp_psu_pct = "Completion Rate of PSUs",
+        tot_hh_in_dist_n = "Total HHs",
+        comp_hh_in_dist_n = "Completed HHs",
+        comp_hh_pct = "Completion Rate of HHs"
     ) |> 
     gt_theme_espn() |> 
-    opt_interactive(
-        use_pagination = FALSE
-    )
+    opt_interactive(use_pagination = FALSE)
 
 
 # ** PSU Completion Rate Table --------------------------------------------
 # Transform the Data Overall for Interview Progress calculation Across
 # ALL PSUS
 df_tbl_progress_psu <- data_ex_01 |> 
-    # Group by Districts
+    # Group by PSUs
     group_by(DATA02) |> 
     # Calculate the Total and Completed Cases across Districts
     summarize(
+        dist_name = first(DATA04),
         tot_hh_n = sum(cons),
         comp_hh_n = sum(progress_all_01)
     ) |> 
     # Calculate Prop and % of HHs Completed across Districts
     mutate(
         prop_hh = comp_hh_n / tot_hh_n,
-        pct_hh = scales::label_percent()(prop_hh)
-    )
+        # With % symbol
+        # pct_hh = scales::label_percent()(prop_hh)
+        pct_hh = prop_hh * 100,
+        target_col = (30/33) * 100
+    ) |> 
+    # Categorize the PSUs as per num of PSUs completed
+    mutate(psu_status = case_when(
+        comp_hh_n == 33 ~ 1,
+        comp_hh_n %in% 30:32 ~ 2,
+        .default = 3
+    )) |> 
+    # Convert to factor
+    mutate(psu_status = factor(
+        psu_status,
+        levels = c(1, 2, 3),
+        labels = c("Completed", "Partially Completed", "Not Completed")
+    )) |> 
+    # Sort the table by Progress Status and Descending % of PSUs completed
+    arrange(psu_status, -pct_hh)
 
 # Check table
 df_tbl_progress_psu
 # View as DT table
 datatable(
     df_tbl_progress_psu |> select(-prop_hh),
-    colnames = c("PSUs", "Total HHs", "Completed HHs", "Completion Rate")
+    colnames = c("PSUs", "District", "Total HHs", "Completed HHs", "Completion Rate")
 )
 # View as gt table
-df_tbl_progress_psu |> select(-prop_hh) |> 
+df_tbl_progress_psu |> 
+    # Remove columns we need not display
+    select(-c(prop_hh, target_col)) |> 
     gt() |> 
+    # Bullet Plot
+    # gt_plt_bullet(column = pct_hh, target = target_col, width = 50) |>
+    # Progress Bar Plot
+    gt_plt_bar_pct(
+        column = pct_hh, height = 18, width = 150, 
+        fill = "#1A4099", background = "#D3EDF5",
+        font_size = "14px", labels = TRUE
+    ) |>
+    # Colour Code the PSU Progress Status
+    data_color(
+        columns = psu_status,
+        method = "factor",
+        palette = c("Completed" = "green4",
+                    "Partially Completed" = "orange",
+                    "Not Completed" = "red4")
+    ) |> 
+    # Apply column labels
     cols_label(
         "DATA02" = "PSU Code",
+        "dist_name" = "District Name",
         "tot_hh_n" = "Total HHs", 
         "comp_hh_n" = "Completed HHs", 
-        "pct_hh" = "Completion Rate"
+        "pct_hh" = "Completion Rate",
+        "psu_status" = "PSU Status"
     ) |> 
-    gt_theme_espn() |> 
-    opt_interactive(
-        use_pagination = FALSE
-    )
+    # Autofit table
+    tab_options(table.width = pct(100)) |> 
+    # Apply table theme    
+    gt_theme_espn()
+    # !!! NOTE: INTERACTIVE TABLES DO NOT WORK WITH INLINE PLOTS !!!
+    # opt_interactive(use_pagination = FALSE)
 
 
 # ** Map of PSU Location --------------------------------------------------
@@ -1263,9 +1332,9 @@ df_fiid_rrate |>
     data_color(
         columns = rrate_status,
         method = "factor",
-        palette = c("Good" = "green3", 
+        palette = c("Good" = "green4", 
                     "Poor" = "orange", 
-                    "Very Poor" = "red")
+                    "Very Poor" = "red4")
     ) |> 
     # Add Theme to the gt table 
     gt_theme_espn() |> 

@@ -42,7 +42,7 @@ easypackages::libraries(
   "gtsummary",            # output summary tables
   "flextable",            # creating tables from objects
   "officer",              # editing in office docs
-  "DT",
+  "DT",                   # r interface to the DataTables lib
   
   # R graph related packages
   "ggstats",
@@ -138,173 +138,173 @@ data_ex_00 <- read_csv(here("data_tablet_it", "gats3_flatfile_hp_260219.csv"))
 # Here we prepare the dataset by mutating custom variables needed for 
 # preparing the Dashboard.
 data_ex_01 <- data_ex_00 |> 
-    
-    # Constant
-    mutate(cons = 1) |> 
-    
-    # Overall Progress Check - Based on Status Code
-    # Prepare the binary variables for Progress Calculation
-    # NOTE: We set missing as "0" across all variables
-    mutate(
-        progress_all_01 = if_else(
-            HHCurrentEvent >= 200 | IQCurrentEvent >= 400,
-            1, 0, missing = 0
-        ),
-        progress_hh_01 = if_else(
-            HHCurrentEvent >= 200, 1, 0, missing = 0
-        ),
-        progress_ind_01 = if_else(
-            IQCurrentEvent >= 400, 1, 0, missing = 0
-        ),
-        progress_e01_01 = if_else(
-            !is.na(E01), 1, 0, missing = 0
-        )
-    ) |>
-    
-    # Response Rate Across Total, Household and Individual Questionnaires and
-    # Person-level Refusal Rate computed based on
-    # GATS QUALITY ASSURANCE MANUAL Page 44-45
-    # Keep only the relevant Codes for HH and IND Surveys
-    mutate(
-        hh_curr_event_6c = if_else(
-            !(HHCurrentEvent %in% c(200, 202, 203, 209, 204, 208)),
-            NA, HHCurrentEvent, missing = NA
-        ),
-        ind_curr_event_6c = if_else(
-            !(IQCurrentEvent %in% c(400, 402, 409, 404, 407, 408)),
-            NA, IQCurrentEvent, missing = NA
-        )
-    ) |> 
-    # Prepare binary variables for HH, IND Surveys and Refusal Rate
-    # Will use this to sum by PSU and get the response rates
-    mutate(
-        # Progress - Household Questionnaire
-        rrate_hhq_01 = if_else(
-            HHCurrentEvent == 200,
-            1, 0, missing = NA
-        ),
-        # Progress - Individual Questionnaire
-        rrate_indq_01 = if_else(
-            IQCurrentEvent == 400,
-            1, 0, missing = NA
-        ),
-        # Person-level Refusal Rate
-        ref_rate_01 = if_else(
-            IQCurrentEvent == 404,
-            1, 0, missing = NA
-        )
-    ) |>
-    
-    # Final Survey Codes - Recode Pending Codes into Single Category
-    # Recategorize HH Questionnaire - Codes <200 is "Pending"
-    mutate(final_code_hhq = if_else(
-        HHCurrentEvent < 200, 
-        "Pending", as.character(HHCurrentEvent), missing = NA
-    )) |> 
-    # Recategorize IND Questionnaire - Codes < 400 is "Pending"
-    mutate(final_code_indq = case_when(
-        IQCurrentEvent < 400 ~ "Pending",
-        final_code_hhq == 200 & is.na(CONSENT6) ~ "Unopened",
-        .default = as.character(IQCurrentEvent)
-    )) |> 
-    # Convert to Factor for showing all values in crosstab
-    mutate(
-        final_code_hhq = factor(
-            final_code_hhq, 
-            levels = c("200", "201", "202", "203", "204", "205", "206",
-                       "208", "209", "999", "Pending")
-        ),
-        final_code_indq = factor(
-            final_code_indq,
-            levels = c("400", "402", "403", "404", "407", "408", "409",
-                       "Unopened", "Pending")
-        )
-    ) |> 
-    
-    # Overall Progress Check - Based on Consent
-    mutate(consent_part = if_else(CONSENT6 == 1, 1, 0, missing = 0)) |> 
-    mutate(consent_part_fct = factor(
-        consent_part, 
-        levels = c(0, 1),
-        labels = c("Remaining", "Completed")
-    )) |> 
-    
-    # Age Distribution [5-year age groups]
-    mutate(age5c = case_when(
-        RSAGE < 15 ~ "14 & Below",
-        RSAGE >=15 & RSAGE <=19 ~ "15-19",
-        RSAGE >=20 & RSAGE <=24 ~ "20-24",
-        RSAGE >=25 & RSAGE <=29 ~ "25-29",
-        RSAGE >=30 & RSAGE <=34 ~ "30-34",
-        RSAGE >=35 & RSAGE <=39 ~ "35-39",
-        RSAGE >=40 & RSAGE <=44 ~ "40-44",
-        RSAGE >=45 & RSAGE <=49 ~ "45-49",
-        RSAGE >=50 & RSAGE <=54 ~ "50-54",
-        RSAGE >=55 & RSAGE <=59 ~ "55-59",
-        RSAGE >=60 & RSAGE <=64 ~ "60-64",
-        RSAGE >=65 & RSAGE <=69 ~ "65-69",
-        RSAGE >=70 & RSAGE <=74 ~ "70-74",
-        RSAGE >=75 & RSAGE <=79 ~ "75-79",
-        RSAGE >= 80 ~ "80+"
+  
+  # Constant
+  mutate(cons = 1) |> 
+  
+  # Overall Progress Check - Based on Status Code
+  # Prepare the binary variables for Progress Calculation
+  # NOTE: We set missing as "0" across all variables
+  mutate(
+    progress_all_01 = if_else(
+      HHCurrentEvent >= 200 | IQCurrentEvent >= 400,
+      1, 0, missing = 0
     ),
-    age5c = factor(
-        age5c,
-        levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44",
-                   "45-49", "50-54", "55-59", "60-64", "65-69", "70-74",
-                   "75-79", "80+")
-    )) |> 
-    # Gender Distribution Check
-    mutate(gender = factor(
-        A01,
-        levels = c(1, 2, 3),
-        labels = c("Male", "Female", "Other")
-    )) |> 
-    mutate(gender_fm = if_else(A01 == 1, 1, 0, missing = NA)) |> 
-    mutate(gender_fm = factor(
-        gender, 
-        levels = c(0, 1), 
-        labels = c("Female", "Male")
-    )) |> 
-    # Currently Smoke Tobacco Prevalence Check
-    mutate(curr_smoke = factor(
-        B01,
-        levels = c(1, 2, 3, -7, -9),
-        labels = c("Daily", "Less than Daily", "Not at all", 
-                   "Don't know", "Refused")
-    )) |>
-    # Currently Smokeless Tobacco Prevalence Check
-    mutate(curr_smokeless = factor(
-        C01,
-        levels = c(1, 2, 3, -7, -9),
-        labels = c("Daily", "Less than Daily", "Not at all", 
-                   "Don't know", "Refused")
-    )) |>
-    # Heard/Seen E-cigarette Check
-    mutate(seen_ecig = factor(
-        EC1,
-        levels = c(1, 2, -9),
-        labels = c("Yes", "No", "Refused")
-    )) |> 
-    # Currently Use E-cigarette Check
-    mutate(curr_ecig = factor(
-        EC2,
-        levels = c(1, 2, 3, -7, -9),
-        labels = c("Daily", "Less than Daily", "Not at all", 
-                   "Don't know", "Refused")
-    )) |> 
-    
-    # Consume Paan masala without tobacco
-    mutate(paan_wotob = factor(
-        CC1,
-        levels = c(1, 2, -9),
-        labels = c("Yes", "No", "Refused")
-    )) |> 
-    # Consume Areca nut without tobacco
-    mutate(areca_nut = factor(
-        CC5,
-        levels = c(1, 2, -9),
-        labels = c("Yes", "No", "Refused")
-    ))
+    progress_hh_01 = if_else(
+      HHCurrentEvent >= 200, 1, 0, missing = 0
+    ),
+    progress_ind_01 = if_else(
+      IQCurrentEvent >= 400, 1, 0, missing = 0
+    ),
+    progress_e01_01 = if_else(
+      !is.na(E01), 1, 0, missing = 0
+    )
+  ) |>
+  
+  # Response Rate Across Total, Household and Individual Questionnaires and
+  # Person-level Refusal Rate computed based on
+  # GATS QUALITY ASSURANCE MANUAL Page 44-45
+  # Keep only the relevant Codes for HH and IND Surveys
+  mutate(
+    hh_curr_event_6c = if_else(
+      !(HHCurrentEvent %in% c(200, 202, 203, 209, 204, 208)),
+      NA, HHCurrentEvent, missing = NA
+    ),
+    ind_curr_event_6c = if_else(
+      !(IQCurrentEvent %in% c(400, 402, 409, 404, 407, 408)),
+      NA, IQCurrentEvent, missing = NA
+    )
+  ) |> 
+  # Prepare binary variables for HH, IND Surveys and Refusal Rate
+  # Will use this to sum by PSU and get the response rates
+  mutate(
+    # Progress - Household Questionnaire
+    rrate_hhq_01 = if_else(
+      HHCurrentEvent == 200,
+      1, 0, missing = NA
+    ),
+    # Progress - Individual Questionnaire
+    rrate_indq_01 = if_else(
+      IQCurrentEvent == 400,
+      1, 0, missing = NA
+    ),
+    # Person-level Refusal Rate
+    ref_rate_01 = if_else(
+      IQCurrentEvent == 404,
+      1, 0, missing = NA
+    )
+  ) |>
+  
+  # Final Survey Codes - Recode Pending Codes into Single Category
+  # Recategorize HH Questionnaire - Codes <200 is "Pending"
+  mutate(final_code_hhq = if_else(
+    HHCurrentEvent < 200, 
+    "Pending", as.character(HHCurrentEvent), missing = NA
+  )) |> 
+  # Recategorize IND Questionnaire - Codes < 400 is "Pending"
+  mutate(final_code_indq = case_when(
+    IQCurrentEvent < 400 ~ "Pending",
+    final_code_hhq == 200 & is.na(CONSENT6) ~ "Unopened",
+    .default = as.character(IQCurrentEvent)
+  )) |> 
+  # Convert to Factor for showing all values in crosstab
+  mutate(
+    final_code_hhq = factor(
+      final_code_hhq, 
+      levels = c("200", "201", "202", "203", "204", "205", "206",
+                 "208", "209", "999", "Pending")
+    ),
+    final_code_indq = factor(
+      final_code_indq,
+      levels = c("400", "402", "403", "404", "407", "408", "409",
+                 "Unopened", "Pending")
+    )
+  ) |> 
+  
+  # Overall Progress Check - Based on Consent
+  mutate(consent_part = if_else(CONSENT6 == 1, 1, 0, missing = 0)) |> 
+  mutate(consent_part_fct = factor(
+    consent_part, 
+    levels = c(0, 1),
+    labels = c("Remaining", "Completed")
+  )) |> 
+  
+  # Age Distribution [5-year age groups]
+  mutate(age5c = case_when(
+    RSAGE < 15 ~ "14 & Below",
+    RSAGE >=15 & RSAGE <=19 ~ "15-19",
+    RSAGE >=20 & RSAGE <=24 ~ "20-24",
+    RSAGE >=25 & RSAGE <=29 ~ "25-29",
+    RSAGE >=30 & RSAGE <=34 ~ "30-34",
+    RSAGE >=35 & RSAGE <=39 ~ "35-39",
+    RSAGE >=40 & RSAGE <=44 ~ "40-44",
+    RSAGE >=45 & RSAGE <=49 ~ "45-49",
+    RSAGE >=50 & RSAGE <=54 ~ "50-54",
+    RSAGE >=55 & RSAGE <=59 ~ "55-59",
+    RSAGE >=60 & RSAGE <=64 ~ "60-64",
+    RSAGE >=65 & RSAGE <=69 ~ "65-69",
+    RSAGE >=70 & RSAGE <=74 ~ "70-74",
+    RSAGE >=75 & RSAGE <=79 ~ "75-79",
+    RSAGE >= 80 ~ "80+"
+  ),
+  age5c = factor(
+    age5c,
+    levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44",
+               "45-49", "50-54", "55-59", "60-64", "65-69", "70-74",
+               "75-79", "80+")
+  )) |> 
+  # Gender Distribution Check
+  mutate(gender = factor(
+    A01,
+    levels = c(1, 2, 3),
+    labels = c("Male", "Female", "Other")
+  )) |> 
+  mutate(gender_fm = if_else(A01 == 1, 1, 0, missing = NA)) |> 
+  mutate(gender_fm = factor(
+    gender, 
+    levels = c(0, 1), 
+    labels = c("Female", "Male")
+  )) |> 
+  # Currently Smoke Tobacco Prevalence Check
+  mutate(curr_smoke = factor(
+    B01,
+    levels = c(1, 2, 3, -7, -9),
+    labels = c("Daily", "Less than Daily", "Not at all", 
+               "Don't know", "Refused")
+  )) |>
+  # Currently Smokeless Tobacco Prevalence Check
+  mutate(curr_smokeless = factor(
+    C01,
+    levels = c(1, 2, 3, -7, -9),
+    labels = c("Daily", "Less than Daily", "Not at all", 
+               "Don't know", "Refused")
+  )) |>
+  # Heard/Seen E-cigarette Check
+  mutate(seen_ecig = factor(
+    EC1,
+    levels = c(1, 2, -9),
+    labels = c("Yes", "No", "Refused")
+  )) |> 
+  # Currently Use E-cigarette Check
+  mutate(curr_ecig = factor(
+    EC2,
+    levels = c(1, 2, 3, -7, -9),
+    labels = c("Daily", "Less than Daily", "Not at all", 
+               "Don't know", "Refused")
+  )) |> 
+  
+  # Consume Paan masala without tobacco
+  mutate(paan_wotob = factor(
+    CC1,
+    levels = c(1, 2, -9),
+    labels = c("Yes", "No", "Refused")
+  )) |> 
+  # Consume Areca nut without tobacco
+  mutate(areca_nut = factor(
+    CC5,
+    levels = c(1, 2, -9),
+    labels = c("Yes", "No", "Refused")
+  ))
 
 ```
 
@@ -327,7 +327,7 @@ data_ex_01 <- data_ex_01 |>
 
 # {.sidebar width="220px"}
 
-### Fieldwork Monitoring Dashboard
+### Main Fieldwork Monitoring Dashboard
 
 This dashboard displays statistics for `{r} data_ex_00$DATA01 |> unique()`:
 
@@ -369,32 +369,43 @@ This Dashboard is based on Data Generated from the GSS App used for Data Collect
 # Transform the Data Overall for Interview Progress calculation Across
 # ALL DISTRICTS
 data_progress_dist <- data_ex_01 |> 
-  # Group by Districts
-  group_by(DATA04) |> 
-  # Calculate the Total and Completed Cases across districts
-  summarize(
-    tot_hh_n = sum(cons),
-    comp_hh_n = sum(progress_all_01)
-  ) |> 
-  # Calculate Number of Districts Completed
-  mutate(progress_dist_01 = if_else(
-    comp_hh_n >= 30, 
-    1, 0, missing = 0
-  )) |> 
-  # Calculate overall stats of Districts
-  summarize(
-    tot_dist_n = n(),
-    comp_dist_n = sum(progress_dist_01)
-  ) |> 
-  # Calculate Percentage of Completed Districts
-  mutate(comp_dist_pct = (comp_dist_n / tot_dist_n)) |>
-  # Prepare the Progress Display Statistics in N (%)
-  mutate(stat_dist = str_c(
-    comp_dist_n, 
-    " (", 
-    scales::label_percent()(comp_dist_pct),
-    ")"
-  ))
+    # Group by Districts and PSUs
+    group_by(DATA04, DATA02) |> 
+    # Calculate the Total and Completed Cases across PSUs
+    summarize(
+        tot_hh_n = sum(cons),
+        comp_hh_n = sum(progress_all_01),
+        .groups = "drop_last"
+    ) |> 
+    # Calculate Number of PSUs Completed
+    mutate(progress_psu_01 = if_else(
+        comp_hh_n >= 30, 
+        1, 0, missing = 0
+    )) |> 
+    # Calculate the Total and Completed PSUs across Districts
+    summarize(
+        tot_psu_n = n(),
+        comp_psu_n = sum(progress_psu_01)
+    ) |> 
+    # Calculate Num of Districts Completed
+    mutate(progress_dist_01 = if_else(
+        tot_psu_n == comp_psu_n,
+        1, 0, missing = 0
+    )) |> 
+    # Calculate overall stats of Districts
+    summarize(
+        tot_dist_n = n(),
+        comp_dist_n = sum(progress_dist_01)
+    ) |> 
+    # Calculate Percentage of Completed Districts
+    mutate(comp_dist_pct = (comp_dist_n / tot_dist_n)) |>
+    # Prepare the Progress Display Statistics in N (%)
+    mutate(stat_dist = str_c(
+        comp_dist_n, 
+        " (", 
+        scales::label_percent()(comp_dist_pct),
+        ")"
+    ))
 
 
 # Transform the Data Overall for Interview Progress calculation Across
@@ -549,17 +560,21 @@ df_ex_gps <- data_ex_01 |>
   select(FIID, CASEID, DATA02, DATA04, DATA11, INTRO_PASSIVE_GPS) |> 
   # Filter out the missing values
   filter(!is.na(INTRO_PASSIVE_GPS)) |> 
-  # Extract Coordinate values from the GPS Variable
+  # Extract coordinate values from the GPS Variable
   separate_wider_delim(
     INTRO_PASSIVE_GPS, 
     delim = " ",
-    names = c("latitude", "longitude", NA, NA)
+    names = c("latitude", "longitude", NA, NA),
+    # Added safety parameter for real-world messy GPS data
+    too_few = "align_start"
   ) |> 
   # Convert the variable type to numeric
   mutate(
     latitude = as.numeric(latitude),
     longitude = as.numeric(longitude)
-  )
+  ) |> 
+  # Remove parsing errors
+  filter(!is.na(latitude) & !is.na(longitude))
 
 ```
 
@@ -586,7 +601,7 @@ leaflet(data = df_ex_gps) |>
     lng = ~longitude,
     # This is the magic line for large datasets
     clusterOptions = markerClusterOptions(), 
-    # Adds a clickable popup showing the consent status for that household
+    # Adds a clickable popup showing the details for that household
     popup = ~str_c(
       "<b>District: </b>", DATA04, "<br>",
       "<b>PSU Code: </b>", DATA02, "<br>",
@@ -606,18 +621,30 @@ leaflet(data = df_ex_gps) |>
 # Transform the Data Overall for Interview Progress calculation Across 
 # ALL DISTRICTS
 df_tbl_progress_dist <- data_ex_01 |> 
-  # Group by Districts
-  group_by(DATA04) |> 
-  # Calculate the Total and Completed Cases across Districts
-  summarize(
-    tot_hh_n = sum(cons),
-    comp_hh_n = sum(progress_all_01)
-  ) |> 
-  # Calculate Prop and % of HHs Completed across Districts
-  mutate(
-    prop_hh = comp_hh_n / tot_hh_n,
-    pct_hh = scales::label_percent()(prop_hh)
-  )
+    # Group by Districts and PSUs
+    group_by(DATA04, DATA02) |> 
+    # Calculate the Total and Completed Cases across PSUs
+    summarize(
+        tot_hh_n = sum(cons),
+        comp_hh_n = sum(progress_all_01),
+        .groups = "drop_last"
+    ) |> 
+    # Calculate Number of PSUs Completed
+    mutate(progress_psu_01 = if_else(
+        comp_hh_n >= 30, 
+        1, 0, missing = 0
+    )) |> 
+    # Calculate the Total and Completed PSUs across Districts
+    summarize(
+        tot_psu_n = n(),
+        comp_psu_n = sum(progress_psu_01),
+        tot_hh_in_dist_n = sum(tot_hh_n),
+        comp_hh_in_dist_n = sum(comp_hh_n)
+    ) |> 
+    # Calculate the HH Completion Percentage
+    mutate(comp_hh_pct = comp_hh_in_dist_n / tot_hh_in_dist_n) |> 
+    # Calculate the PSU Completion Percentage
+    mutate(comp_psu_pct = comp_psu_n / tot_psu_n, .after = comp_psu_n)
 
 ```
 
@@ -628,18 +655,20 @@ df_tbl_progress_dist <- data_ex_01 |>
 #| output: true
 
 # View as gt table
-df_tbl_progress_dist |> select(-prop_hh) |> 
-  gt() |> 
-  cols_label(
-    DATA04 = "District Name",
-    tot_hh_n = "Total HHs",
-    comp_hh_n = "Completed HHs",
-    pct_hh = "Completion Rate"
-  ) |> 
-  gt_theme_espn() |> 
-  opt_interactive(
-    use_pagination = FALSE
-  )
+df_tbl_progress_dist |> 
+    gt() |> 
+    fmt_percent(ends_with("pct"), decimals = 1) |> 
+    cols_label(
+        DATA04 = "District Name",
+        tot_psu_n = "Total PSUs",
+        comp_psu_n = "Completed PSUs",
+        comp_psu_pct = "Completion Rate of PSUs",
+        tot_hh_in_dist_n = "Total HHs",
+        comp_hh_in_dist_n = "Completed HHs",
+        comp_hh_pct = "Completion Rate of HHs"
+    ) |> 
+    gt_theme_espn() |> 
+    opt_interactive(use_pagination = FALSE)
 
 ```
 
@@ -650,18 +679,36 @@ df_tbl_progress_dist |> select(-prop_hh) |>
 # Transform the Data Overall for Interview Progress calculation Across 
 # ALL PSUS
 df_tbl_progress_psu <- data_ex_01 |> 
-  # Group by Districts
+  # Group by PSUs
   group_by(DATA02) |> 
   # Calculate the Total and Completed Cases across Districts
   summarize(
+    dist_name = first(DATA04),
     tot_hh_n = sum(cons),
     comp_hh_n = sum(progress_all_01)
   ) |> 
   # Calculate Prop and % of HHs Completed across Districts
   mutate(
     prop_hh = comp_hh_n / tot_hh_n,
-    pct_hh = scales::label_percent()(prop_hh)
-  )
+    # With % symbol
+    # pct_hh = scales::label_percent()(prop_hh)
+    pct_hh = prop_hh * 100,
+    target_col = (30/33) * 100
+  ) |> 
+  # Categorize the PSUs as per num of PSUs completed
+  mutate(psu_status = case_when(
+    comp_hh_n == 33 ~ 1,
+    comp_hh_n %in% 30:32 ~ 2,
+    .default = 3
+  )) |> 
+  # Convert to factor
+  mutate(psu_status = factor(
+    psu_status,
+    levels = c(1, 2, 3),
+    labels = c("Completed", "Partially Completed", "Not Completed")
+  )) |> 
+  # Sort the table by Progress Status and Descending % of PSUs completed
+  arrange(psu_status, -pct_hh)
 
 ```
 
@@ -671,18 +718,41 @@ df_tbl_progress_psu <- data_ex_01 |>
 #| echo: false
 #| output: true
 
-df_tbl_progress_psu |> select(-prop_hh) |> 
+# View as gt table
+df_tbl_progress_psu |> 
+  # Remove columns we need not display
+  select(-c(prop_hh, target_col)) |> 
   gt() |> 
+  # Bullet Plot
+  # gt_plt_bullet(column = pct_hh, target = target_col, width = 50) |>
+  # Progress Bar Plot
+  gt_plt_bar_pct(
+    column = pct_hh, height = 18, width = 150, 
+    fill = "#1A4099", background = "#D3EDF5",
+    font_size = "14px", labels = TRUE
+  ) |>
+  # Colour Code the PSU Progress Status
+  data_color(
+    columns = psu_status,
+    method = "factor",
+    palette = c("Completed" = "green4",
+                "Partially Completed" = "orange",
+                "Not Completed" = "red4")
+  ) |> 
   cols_label(
     "DATA02" = "PSU Code",
+    "dist_name" = "District Name",
     "tot_hh_n" = "Total HHs", 
     "comp_hh_n" = "Completed HHs", 
-    "pct_hh" = "Completion Rate"
+    "pct_hh" = "Completion Rate",
+    "psu_status" = "PSU Status"
   ) |> 
-  gt_theme_espn() |> 
-  opt_interactive(
-    use_pagination = FALSE
-  )
+  # Autofit table
+  tab_options(table.width = pct(100)) |> 
+  # Apply table theme
+  gt_theme_espn()
+# !!! NOTE: INTERACTIVE TABLES DO NOT WORK WITH INLINE PLOTS !!!
+# opt_interactive(use_pagination = FALSE)
 
 ```
 
@@ -1313,7 +1383,7 @@ df_fiid_rrate <- data_ex_01 |>
 
 ```{r}
 #| label: table-rrate
-#| title: Field Investigator Response Rates
+#| title: Field Investigator Performance
 #| echo: false
 #| output: true
 
@@ -1357,9 +1427,9 @@ df_fiid_rrate |>
   data_color(
     columns = rrate_status,
     method = "factor",
-    palette = c("Good" = "green3", 
+    palette = c("Good" = "green4", 
                 "Poor" = "orange", 
-                "Very Poor" = "red")
+                "Very Poor" = "red4")
   ) |> 
   # Add Theme to the gt table 
   gt_theme_espn() |> 
