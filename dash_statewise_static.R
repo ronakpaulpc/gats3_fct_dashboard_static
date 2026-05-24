@@ -121,7 +121,10 @@ set_flextable_defaults(
 # VERSION D260405
 # data_ex_00 <- read_csv(here("data_tablet_it", "GATS_FlatFile_260405.csv"))
 # VERSION D260414
-data_ex_00 <- read_csv(here("data_tablet_it", "GATS_FlatFile_260414.csv"))
+# data_ex_00 <- read_csv(here("data_tablet_it", "GATS_FlatFile_260414.csv"))
+# VERSION D260521
+data_ex_00 <- read_csv(here("data_tablet_it", "GATS_FlatFile_260521.csv"))
+
 
 # Check the data dictionary
 data_ex_00 |> 
@@ -170,6 +173,11 @@ data_ex_01 <- data_ex_00 |>
     mutate(
         progress_all_01 = if_else(
             HHCurrentEvent >= 200 | IQCurrentEvent >= 400,
+            1, 0, missing = 0
+        ),
+        # Code 200 and Code 400 Interviews
+        progress_200_400 = if_else(
+            HHCurrentEvent == 200 & IQCurrentEvent == 400,
             1, 0, missing = 0
         ),
         progress_hh_01 = if_else(
@@ -339,10 +347,12 @@ data_ex_01 <- data_ex_00 |>
 # ** Variable checks ------------------------------------------------------
 # Please Check the variables after data preparation
 # Frequency - Overall progress
-data_ex_01 |> tabyl(progress_all_01)
-data_ex_01 |> tabyl(progress_hh_01)
-data_ex_01 |> tabyl(progress_ind_01)
-data_ex_01 |> tabyl(progress_e01_01)
+data_ex_01 |> tabyl(progress_all_01) |> adorn_totals()
+data_ex_01 |> tabyl(progress_200_400) |> adorn_totals()
+data_ex_01 |> tabyl(progress_hh_01) |> adorn_totals()
+data_ex_01 |> tabyl(progress_ind_01) |> adorn_totals()
+data_ex_01 |> tabyl(progress_e01_01) |> adorn_totals()
+
 
 # Crosstab - 6 Category Final Codes with All Final Codes
 data_ex_01 |> tabyl(HHCurrentEvent, hh_curr_event_6c)
@@ -392,7 +402,7 @@ data_ex_01 |> view()
 
 #_====
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# C02 - P1 Overall Progress -------------------------------------------
+# C02 - P1 Overall Progress -----------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Here we develop and test the Dashboard Cards and them implement it in the
 # Dashboard. For Dashboard we run and check which version Displays the best 
@@ -555,7 +565,8 @@ data_consent$n_consent
 
 # ** Map of PSU Location --------------------------------------------------
 # Assuming your Himachal data is loaded as a dataframe called 'hp_data'
-# Replace 'lat', 'lon', and 'HH_ID' with your actual column names from the CDC app
+# Replace 'lat', 'lon', and 'HH_ID' with your actual column names from the 
+# CDC app.
 # Prepare the GPS Data
 df_ex_gps <- data_ex_01 |>
     # Keep only the required variables
@@ -720,6 +731,8 @@ df_tbl_progress_psu <- data_ex_01 |>
     # Calculate the Total and Completed Cases across Districts
     summarize(
         dist_name = first(DATA04),
+        sub_dist_name = first(DATA05),
+        psu_name = first(DATA06),
         tot_hh_n = sum(cons),
         comp_hh_n = sum(progress_all_01)
     ) |> 
@@ -743,15 +756,21 @@ df_tbl_progress_psu <- data_ex_01 |>
         levels = c(1, 2, 3),
         labels = c("Completed", "Partially Completed", "Not Completed")
     )) |> 
+    # Keep only the required variables
+    select(
+        dist_name, sub_dist_name, DATA02, psu_name,
+        tot_hh_n, comp_hh_n, prop_hh, pct_hh, target_col, psu_status
+    ) |> 
     # Sort the table by Progress Status and Descending % of PSUs completed
     arrange(psu_status, -pct_hh)
-
 # Check table
-df_tbl_progress_psu
+df_tbl_progress_psu |> view("chk")
+
 # View as DT table
 datatable(
     df_tbl_progress_psu |> select(-prop_hh),
-    colnames = c("PSUs", "District", "Total HHs", "Completed HHs", "Completion Rate")
+    colnames = c("PSUs", "District", "Total HHs", 
+                 "Completed HHs", "Completion Rate")
 )
 # View as gt table
 df_tbl_progress_psu |> 
@@ -776,8 +795,10 @@ df_tbl_progress_psu |>
     ) |> 
     # Apply column labels
     cols_label(
-        "DATA02" = "PSU Code",
         "dist_name" = "District Name",
+        "sub_dist_name" = "Sub-district Name",
+        "DATA02" = "PSU Code",
+        "psu_name" = "PSU Name",
         "tot_hh_n" = "Total HHs", 
         "comp_hh_n" = "Completed HHs", 
         "pct_hh" = "Completion Rate",
@@ -907,10 +928,541 @@ df_comp_fig_psu_all |>
 toc()           # 0.25 sec elapsed
 
 
+# ** PSU with Completed Interview with code 200 and 400 -------------------
+# Calculate Interview Completion Figure Across PSU'S
+df_psu_comp_fig_00 <- data_ex_01 |> 
+    # Filter for Odisha
+    filter(DATA01 == "OD") |> 
+    # Crosstab of PSU Code and HH Code
+    tabyl(DATA02, progress_200_400) |> 
+    # Add totals to each row    
+    adorn_totals(where = "col") |> 
+    # Convert to tibble
+    as_tibble() |> 
+    # Rename the required columns
+    rename(
+        "psu_code" = "DATA02",
+        "hh_remaining" = "0",
+        "hh_comp_200_400" = "1",
+        "hh_total" = "Total"
+    ) |>
+    # Re-order the variables
+    select(psu_code, hh_total, hh_comp_200_400, hh_remaining)
+# check
+df_psu_comp_fig_00 |> view("chk")
+
+# Calculate Response Rate Across PSU's
+df_psu_rrate_00 <- data_ex_01 |> 
+    # Filter for Odisha
+    filter(DATA01 == "OD") |> 
+    # Group by PSU CODE
+    group_by(DATA02) |> 
+    # Calculate Count of HHs
+    summarize(
+        tot_hhq_n = sum(!is.na(rrate_hhq_01)),
+        tot_indq_n = sum(!is.na(rrate_indq_01)),
+        comp_hhq_hh_n = sum(rrate_hhq_01, na.rm = T),
+        comp_indq_hh_n = sum(rrate_indq_01, na.rm = T),
+        ref_rate_hh_n = sum(ref_rate_01, na.rm = T)
+    ) |> 
+    # Calculate Response Rate of HHs in %
+    mutate(
+        comp_hhq_hh_pct = comp_hhq_hh_n / tot_hhq_n,
+        comp_indq_hh_pct = comp_indq_hh_n / tot_indq_n,
+        comp_allq_hh_pct = comp_hhq_hh_pct * comp_indq_hh_pct,
+        ref_rate_hh_pct = ref_rate_hh_n / tot_indq_n
+    ) |> 
+    # Categorical status var of Response Rates
+    # Categorical var with scores as category
+    mutate(rrate_status = case_when(
+        comp_hhq_hh_pct >= 0.92 & comp_indq_hh_pct >= 0.98 & 
+            comp_allq_hh_pct >= 0.92 ~ 3,
+        comp_hhq_hh_pct < 0.92 & comp_indq_hh_pct < 0.98 &  
+            comp_allq_hh_pct < 0.92 ~ 1,
+        is.na(comp_hhq_hh_pct) | is.na(comp_indq_hh_pct) | 
+            is.na(comp_allq_hh_pct) ~ 4,
+        .default = 2
+    )) |> 
+    # Convert to factor
+    mutate(rrate_status = factor(
+        rrate_status,
+        levels = c(3, 2, 1, 4),
+        labels = c("Good", "Poor", "Very Poor", "Pending")
+    )) |> 
+    # Rename the required columns
+    rename(
+        "psu_code" = "DATA02",
+        "hrr" = "comp_hhq_hh_pct",
+        "irr" = "comp_indq_hh_pct",
+        "trr" = "comp_allq_hh_pct"
+    ) |>
+    # Keep the required columns
+    select(psu_code, hrr, irr, trr)
+# Check table
+df_psu_rrate_00 |> view("chk")
+
+# Merge the two tables
+df_psu_fig_and_rrate <- inner_join(
+    df_psu_comp_fig_00, df_psu_rrate_00,
+    by = join_by(psu_code)
+)
+# check
+df_psu_fig_and_rrate
+
+# Convert to flextable for export        
+ft_psu_fig_and_rrate <- df_psu_fig_and_rrate |> 
+    # Sort by HH Remaining
+    arrange(desc(hh_remaining)) |> 
+    # Covert response rates to percentages
+    mutate(across(
+        c(hrr, irr, trr),
+        scales::label_percent(accuracy = 0.1)
+    )) |> 
+    
+    # Convert to flextable
+    flextable() |> 
+    set_header_labels(
+        psu_code = "PSU Code",
+        hh_total = "Total Interviews",
+        hh_comp_200_400 = "Interviews Completed with Code 200 & 400",
+        hh_remaining = "Interviews Remaining",
+        hrr = "Household Response Rate (HRR) %",
+        irr = "Individual Response Rate (IRR) %",
+        trr = "Total Response Rate (TRR) %"
+    ) |>
+    # Format columns as percentage
+    # colformat_double(
+    #     j = c(5, 6, 7),
+    #     digits = 1,
+    #     suffix = "%"
+    # ) |> 
+    
+    # Theme and alignment
+    theme_box() |> 
+    align(align = "left", part = "all")
+# check
+ft_psu_fig_and_rrate
+
+# Export to Word File
+save_as_docx(
+    ft_psu_fig_and_rrate,
+    path = here(
+        "results_as_required", 
+        "psu_revisit_od_22-05-26.docx")
+)
+
+# Merge and Generate the Combined Completion Table
+df_comp_fig_psu_all <- inner_join(
+    df_comp_fig_psu_hh_00, 
+    df_comp_fig_psu_ind_00,
+    join_by(DATA02)
+) |> 
+    # Create the Pending Individual Interview Column
+    mutate(pending_ind_int = comp_hh_int_200 - comp_ind_int_final)
+# check
+df_comp_fig_psu_all |> view("chk")
+
+# View as gt table
+tic()
+df_comp_fig_psu_all |> 
+    # Convert tibble to gt
+    gt() |> 
+    # Add Spanner header
+    tab_spanner(
+        label = md("**Household Interviews**"),
+        columns = contains("hh_int")
+    ) |> 
+    tab_spanner(
+        label = md("**Individual Interviews**"),
+        columns = contains("ind_int")
+    ) |> 
+    # Apply column labels
+    cols_label(
+        "DATA02" = "PSU Code",
+        "total_hh_int_adj" = html("Total HH Interviews<br>
+                                  Adjusted for<br>
+                                  Non-response"),
+        "total_hh_int_unadj" = html("Total HH Interviews<br>
+                                  Unadjusted for<br>
+                                  Non-response"),
+        "comp_hh_int_200" = html("HH Interviews<br>
+                                 Completed<br>
+                                 with Code 200"),
+        "comp_hh_int_final" = html("HH Interviews<br>
+                                 Completed with<br>
+                                 a Final Code"),
+        "comp_hh_int_209" = html("HH Interviews with<br>
+                                 Nobody at Home<br>"),
+        "pending_hh_int" = html("Pending/Unopened<br>
+                                HH Interviews"),
+        "comp_ind_int_400" = html("IND Interviews<br>
+                                 Completed<br>
+                                 with Code 400"),
+        "comp_ind_int_final" = html("IND Interviews<br>
+                                 Completed with<br>
+                                 a Final Code"),
+        "comp_ind_int_409" = html("IND Interviews with<br>
+                                 Nobody at Home<br>"),
+        "pending_ind_int" = html("Pending/Unopened<br>
+                                IND Interviews")
+    ) |> 
+    # Add footnote
+    tab_footnote(
+        locations = cells_column_labels(pending_ind_int),
+        footnote = md("Negative Values occur due to Incorrect Assignment of
+                      Final Codes by FA")
+    ) |>
+    # # NOTE: Does not work with Interactive Tables
+    # # Add summary rows
+    # grand_summary_rows(
+    #     -DATA02, 
+    #     fns = list("Total" ~ sum(.)),
+    #     side = "top"
+    # ) |> 
+    # Apply table theme    
+    gt_theme_espn() |> 
+    # Make table interactive
+    opt_interactive(use_pagination = FALSE, use_search = TRUE)
+toc()           # 0.25 sec elapsed
+
+
 
 #_====
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# C03 - P2 PSU Statistics -------------------------------------------------
+# C03 - P2 FIID Statistics ------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Here we develop and test the Dashboard Cards and them implement it in the
+# Dashboard. For Dashboard we run and check which version Displays the best 
+# for each variable, like whether a variable should be displayed as a table,
+# a horizontal bar graph, vertical bar graph, etc. So we keep the code for
+# all possibilities here.
+# This section contains the Cards for Page 3 - FIID Statistics.
+
+# ** Response Rate Valuebox -----------------------------------------------
+# SAME AS CALCULATED IN CASE OF C03 - P2 PSU Statistics
+
+
+# ** Response Rate Table --------------------------------------------------
+# Transform the Data for calculating the Response Rate for Overall, 
+# Household and Individual Questionnaire.
+df_fiid_rrate <- data_ex_01 |> 
+    # Group by Field Investigator ID
+    group_by(FIID) |> 
+    # Calculate Count of HHs
+    summarize(
+        tot_hhq_n = sum(!is.na(rrate_hhq_01)),
+        tot_indq_n = sum(!is.na(rrate_indq_01)),
+        comp_hhq_hh_n = sum(rrate_hhq_01, na.rm = T),
+        comp_indq_hh_n = sum(rrate_indq_01, na.rm = T),
+        ref_rate_hh_n = sum(ref_rate_01, na.rm = T)
+    ) |> 
+    # Calculate Response Rate of HHs in %
+    mutate(
+        comp_hhq_hh_pct = comp_hhq_hh_n / tot_hhq_n,
+        comp_indq_hh_pct = comp_indq_hh_n / tot_indq_n,
+        comp_allq_hh_pct = comp_hhq_hh_pct * comp_indq_hh_pct,
+        ref_rate_hh_pct = ref_rate_hh_n / tot_indq_n
+    ) |> 
+    # Categorical status var of Response Rates
+    # Categorical var with scores as category
+    mutate(rrate_status = case_when(
+        comp_hhq_hh_pct >= 0.92 & comp_indq_hh_pct >= 0.98 & 
+            comp_allq_hh_pct >= 0.92 ~ 3,
+        comp_hhq_hh_pct < 0.92 & comp_indq_hh_pct < 0.98 &  
+            comp_allq_hh_pct < 0.92 ~ 1,
+        .default = 2
+    )) |> 
+    # Convert to factor
+    mutate(rrate_status = factor(
+        rrate_status,
+        levels = c(3, 2, 1),
+        labels = c("Good", "Poor", "Very Poor")
+    ))
+
+# Check table
+df_fiid_rrate |> select(-ends_with("_n"))
+# View as gt table
+df_fiid_rrate |> 
+    select(FIID, ref_rate_hh_pct, comp_hhq_hh_pct, comp_indq_hh_pct, 
+           comp_allq_hh_pct, rrate_status) |> 
+    # Convert data to gt object
+    gt() |> 
+    # Add a formal title
+    # tab_header(title = md("**Field Investigator Response Rates**")) |> 
+    # Add Column labels
+    cols_label(
+        FIID = "FIID",
+        ref_rate_hh_pct = html("Person-level <br>Refusal Rate"),
+        comp_hhq_hh_pct = "HRR",
+        comp_indq_hh_pct = "IRR",
+        comp_allq_hh_pct = "TRR",
+        rrate_status = html("Interviewer <br>Performance")
+    ) |> 
+    # Add footnotes for the response rates
+    tab_footnote(
+        footnote = "Total Response Rate, Target >= 92%",
+        locations = cells_column_labels(comp_allq_hh_pct)
+    ) |> 
+    tab_footnote(
+        footnote = "Household Response Rate, Target >= 92%",
+        locations = cells_column_labels(comp_hhq_hh_pct)
+    ) |> 
+    tab_footnote(
+        footnote = "Individual Response Rate, Target >= 98%",
+        locations = cells_column_labels(comp_indq_hh_pct)
+    ) |> 
+    # Add % Symbol
+    fmt_percent(
+        columns = ends_with("_pct"),
+        decimals = 1
+    ) |> 
+    # Colour Code the Response Rate Status
+    data_color(
+        columns = rrate_status,
+        method = "factor",
+        palette = c("Good" = "green4", 
+                    "Poor" = "orange", 
+                    "Very Poor" = "red4")
+    ) |> 
+    # Add Theme to the gt table 
+    gt_theme_espn() |> 
+    # Make the table interactive    
+    opt_interactive(use_pagination = FALSE)
+
+
+# ** HH Survey Code by FIID -----------------------------------------------
+# Crosstab using gtsummary
+tic()
+data_ex_01 |> 
+    tbl_cross(
+        FIID, final_code_hhq,
+        missing = "no", percent = "row"
+    ) |> 
+    bold_labels() |> 
+    as_gt()
+toc()           # 7.65 sec elapsed
+# Crosstab using tabyl and gt
+tic()
+data_ex_01 |> 
+    tabyl(FIID, final_code_hhq, show_na = F) |> 
+    adorn_totals(where = c("row", "col")) |> 
+    adorn_percentages("row") |> 
+    adorn_pct_formatting() |> 
+    adorn_ns(position = "front") |> 
+    gt() |> 
+    tab_spanner(
+        label = md("**HH Survey (Final Code)**"),
+        columns = c(starts_with("2"), "999", "Pending")
+    ) |> 
+    cols_label(
+        FIID = "FIID"
+    ) |> 
+    gt_theme_espn() |> 
+    opt_interactive(use_pagination = FALSE)
+toc()           # 0.27 sec elapsed
+
+
+# ** IND Survey Code by FIID ----------------------------------------------
+# Crosstab using gtsummary
+tic()
+data_ex_01 |> 
+    tbl_cross(
+        FIID, final_code_indq,
+        missing = "no", percent = "row"
+    ) |> 
+    bold_labels() |> 
+    as_gt()
+toc()           # 6.64 sec elapsed
+# Crosstab using tabyl and gt
+tic()
+data_ex_01 |> 
+    tabyl(FIID, final_code_indq, show_na = F) |> 
+    adorn_totals(where = c("row", "col")) |> 
+    adorn_percentages("row") |> 
+    adorn_pct_formatting() |> 
+    adorn_ns(position = "front") |> 
+    gt() |> 
+    tab_spanner(
+        label = md("**IND Survey (Final Code)**"),
+        columns = c(starts_with("4"), "Unopened", "Pending")
+    ) |> 
+    cols_label(
+        FIID = "FIID"
+    ) |> 
+    gt_theme_espn() |> 
+    opt_interactive(use_pagination = FALSE)
+toc()           # 0.26 sec elapsed
+
+
+
+#_====
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# C04 - P3 TEAM Statistics ------------------------------------------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Here we develop and test the Dashboard Cards and them implement it in the
+# Dashboard. For Dashboard we run and check which version Displays the best 
+# for each variable, like whether a variable should be displayed as a table,
+# a horizontal bar graph, vertical bar graph, etc. So we keep the code for
+# all possibilities here.
+# This section contains the Cards for Page 4 - TEAM Statistics.
+
+
+# ** Response Rate Table --------------------------------------------------
+# Transform the Data for calculating the Response Rate for Overall, 
+# Household and Individual Questionnaire.
+df_team_rrate <- data_ex_01 |> 
+    # Group by Team ID
+    group_by(team_id) |> 
+    # Calculate Count of HHs
+    summarize(
+        tot_hhq_n = sum(!is.na(rrate_hhq_01), na.rm = T),
+        tot_indq_n = sum(!is.na(rrate_indq_01), na.rm = T),
+        comp_hhq_hh_n = sum(rrate_hhq_01, na.rm = T),
+        comp_indq_hh_n = sum(rrate_indq_01, na.rm = T),
+        ref_rate_hh_n = sum(ref_rate_01, na.rm = T)
+    ) |> 
+    # Calculate Response Rate of HHs in %
+    mutate(
+        comp_hhq_hh_pct = comp_hhq_hh_n / tot_hhq_n,
+        comp_indq_hh_pct = comp_indq_hh_n / tot_indq_n,
+        comp_allq_hh_pct = comp_hhq_hh_pct * comp_indq_hh_pct,
+        ref_rate_hh_pct = ref_rate_hh_n / tot_indq_n
+    ) |> 
+    # Categorical status var of Response Rates
+    # Categorical var with scores as category
+    mutate(rrate_status = case_when(
+        comp_hhq_hh_pct >= 0.92 & comp_indq_hh_pct >= 0.98 & 
+            comp_allq_hh_pct >= 0.92 ~ 3,
+        comp_hhq_hh_pct < 0.92 & comp_indq_hh_pct < 0.98 &  
+            comp_allq_hh_pct < 0.92 ~ 1,
+        .default = 2
+    )) |> 
+    # Convert to factor
+    mutate(rrate_status = factor(
+        rrate_status,
+        levels = c(3, 2, 1),
+        labels = c("Good", "Poor", "Very Poor")
+    ))
+
+# Check table
+df_team_rrate |> select(-ends_with("_n"))
+# View as gt table
+df_team_rrate |> 
+    select(team_id, ref_rate_hh_pct, comp_hhq_hh_pct, comp_indq_hh_pct, 
+           comp_allq_hh_pct, rrate_status) |> 
+    # Convert data to gt object
+    gt(rownames_to_stub = TRUE) |> 
+    # Add a formal title
+    # tab_header(title = md("**Field Investigator Response Rates**")) |> 
+    # Add Column labels
+    cols_label(
+        team_id = "Team ID",
+        ref_rate_hh_pct = html("Person-level <br>Refusal Rate"),
+        comp_hhq_hh_pct = "HRR",
+        comp_indq_hh_pct = "IRR",
+        comp_allq_hh_pct = "TRR",
+        rrate_status = html("Interviewer <br>Performance")
+    ) |> 
+    # Add footnotes for the response rates
+    tab_footnote(
+        footnote = "Total Response Rate, Target >= 92%",
+        locations = cells_column_labels(comp_allq_hh_pct)
+    ) |> 
+    tab_footnote(
+        footnote = "Household Response Rate, Target >= 92%",
+        locations = cells_column_labels(comp_hhq_hh_pct)
+    ) |> 
+    tab_footnote(
+        footnote = "Individual Response Rate, Target >= 98%",
+        locations = cells_column_labels(comp_indq_hh_pct)
+    ) |> 
+    # Add % Symbol
+    fmt_percent(
+        columns = ends_with("_pct"),
+        decimals = 1
+    ) |> 
+    # Colour Code the Response Rate Status
+    data_color(
+        columns = rrate_status,
+        method = "factor",
+        palette = c("Good" = "green4", 
+                    "Poor" = "orange", 
+                    "Very Poor" = "red4")
+    ) |> 
+    # Add Theme to the gt table 
+    gt_theme_espn() |> 
+    # Make the table interactive    
+    opt_interactive(use_pagination = FALSE)
+
+
+# ** HH Survey Code by Team ID --------------------------------------------
+# Crosstab using gtsummary
+tic()
+data_ex_01 |> 
+    tbl_cross(
+        team_id, final_code_hhq,
+        missing = "no", percent = "row"
+    ) |> 
+    bold_labels() |> 
+    as_gt()
+toc()           # 3.28 sec elapsed
+# Crosstab using tabyl and gt
+tic()
+data_ex_01 |> 
+    tabyl(team_id, final_code_hhq, show_na = F) |> 
+    adorn_totals(where = c("row", "col")) |> 
+    adorn_percentages("row") |> 
+    adorn_pct_formatting() |> 
+    adorn_ns(position = "front") |> 
+    gt() |> 
+    tab_spanner(
+        label = md("**HH Survey (Final Code)**"),
+        columns = c(starts_with("2"), "999", "Pending")
+    ) |> 
+    cols_label(
+        team_id = "Team ID"
+    ) |> 
+    gt_theme_espn() |> 
+    opt_interactive(use_pagination = FALSE)
+toc()           # 0.26 sec elapsed
+
+
+# ** IND Survey Code by FIID ----------------------------------------------
+# Crosstab using gtsummary
+tic()
+data_ex_01 |> 
+    tbl_cross(
+        team_id, final_code_indq,
+        missing = "no", percent = "row"
+    ) |> 
+    bold_labels() |> 
+    as_gt()
+toc()           # 3.16 sec elapsed
+# Crosstab using tabyl and gt
+tic()
+data_ex_01 |> 
+    tabyl(team_id, final_code_indq, show_na = F) |> 
+    adorn_totals(where = c("row", "col")) |> 
+    adorn_percentages("row") |> 
+    adorn_pct_formatting() |> 
+    adorn_ns(position = "front") |> 
+    gt() |> 
+    tab_spanner(
+        label = md("**IND Survey (Final Code)**"),
+        columns = c(starts_with("4"), "Unopened", "Pending")
+    ) |> 
+    cols_label(
+        team_id = "Team ID"
+    ) |> 
+    gt_theme_espn() |> 
+    opt_interactive(use_pagination = FALSE)
+toc()           # 0.2 sec elapsed
+
+
+
+#_====
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# C05 - P4 PSU Statistics -------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Here we develop and test the Dashboard Cards and them implement it in the
 # Dashboard. For Dashboard we run and check which version Displays the best 
@@ -1113,346 +1665,20 @@ toc()           # 0.21 sec elapsed
 
 #_====
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# C04 - P3 FIID Statistics ------------------------------------------------
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Here we develop and test the Dashboard Cards and them implement it in the
-# Dashboard. For Dashboard we run and check which version Displays the best 
-# for each variable, like whether a variable should be displayed as a table,
-# a horizontal bar graph, vertical bar graph, etc. So we keep the code for
-# all possibilities here.
-# This section contains the Cards for Page 3 - FIID Statistics.
-
-# ** Response Rate Valuebox -----------------------------------------------
-# SAME AS CALCULATED IN CASE OF C03 - P2 PSU Statistics
-
-
-# ** Response Rate Table --------------------------------------------------
-# Transform the Data for calculating the Response Rate for Overall, 
-# Household and Individual Questionnaire.
-df_fiid_rrate <- data_ex_01 |> 
-    # Group by Field Investigator ID
-    group_by(FIID) |> 
-    # Calculate Count of HHs
-    summarize(
-        tot_hhq_n = sum(!is.na(rrate_hhq_01)),
-        tot_indq_n = sum(!is.na(rrate_indq_01)),
-        comp_hhq_hh_n = sum(rrate_hhq_01, na.rm = T),
-        comp_indq_hh_n = sum(rrate_indq_01, na.rm = T),
-        ref_rate_hh_n = sum(ref_rate_01, na.rm = T)
-    ) |> 
-    # Calculate Response Rate of HHs in %
-    mutate(
-        comp_hhq_hh_pct = comp_hhq_hh_n / tot_hhq_n,
-        comp_indq_hh_pct = comp_indq_hh_n / tot_indq_n,
-        comp_allq_hh_pct = comp_hhq_hh_pct * comp_indq_hh_pct,
-        ref_rate_hh_pct = ref_rate_hh_n / tot_indq_n
-    ) |> 
-    # Categorical status var of Response Rates
-    # Categorical var with scores as category
-    mutate(rrate_status = case_when(
-        comp_hhq_hh_pct >= 0.92 & comp_indq_hh_pct >= 0.98 & 
-            comp_allq_hh_pct >= 0.92 ~ 3,
-        comp_hhq_hh_pct < 0.92 & comp_indq_hh_pct < 0.98 &  
-            comp_allq_hh_pct < 0.92 ~ 1,
-        .default = 2
-    )) |> 
-    # Convert to factor
-    mutate(rrate_status = factor(
-        rrate_status,
-        levels = c(3, 2, 1),
-        labels = c("Good", "Poor", "Very Poor")
-    ))
-
-# Check table
-df_fiid_rrate |> select(-ends_with("_n"))
-# View as gt table
-df_fiid_rrate |> 
-    select(FIID, ref_rate_hh_pct, comp_hhq_hh_pct, comp_indq_hh_pct, 
-           comp_allq_hh_pct, rrate_status) |> 
-    # Convert data to gt object
-    gt() |> 
-    # Add a formal title
-    # tab_header(title = md("**Field Investigator Response Rates**")) |> 
-    # Add Column labels
-    cols_label(
-        FIID = "FIID",
-        ref_rate_hh_pct = html("Person-level <br>Refusal Rate"),
-        comp_hhq_hh_pct = "HRR",
-        comp_indq_hh_pct = "IRR",
-        comp_allq_hh_pct = "TRR",
-        rrate_status = html("Interviewer <br>Performance")
-    ) |> 
-    # Add footnotes for the response rates
-    tab_footnote(
-        footnote = "Total Response Rate, Target >= 92%",
-        locations = cells_column_labels(comp_allq_hh_pct)
-    ) |> 
-    tab_footnote(
-        footnote = "Household Response Rate, Target >= 92%",
-        locations = cells_column_labels(comp_hhq_hh_pct)
-    ) |> 
-    tab_footnote(
-        footnote = "Individual Response Rate, Target >= 98%",
-        locations = cells_column_labels(comp_indq_hh_pct)
-    ) |> 
-    # Add % Symbol
-    fmt_percent(
-        columns = ends_with("_pct"),
-        decimals = 1
-    ) |> 
-    # Colour Code the Response Rate Status
-    data_color(
-        columns = rrate_status,
-        method = "factor",
-        palette = c("Good" = "green4", 
-                    "Poor" = "orange", 
-                    "Very Poor" = "red4")
-    ) |> 
-    # Add Theme to the gt table 
-    gt_theme_espn() |> 
-    # Make the table interactive    
-    opt_interactive(use_pagination = FALSE)
-
-
-# ** HH Survey Code by FIID -----------------------------------------------
-# Crosstab using gtsummary
-tic()
-data_ex_01 |> 
-    tbl_cross(
-        FIID, final_code_hhq,
-        missing = "no", percent = "row"
-    ) |> 
-    bold_labels() |> 
-    as_gt()
-toc()           # 7.65 sec elapsed
-# Crosstab using tabyl and gt
-tic()
-data_ex_01 |> 
-    tabyl(FIID, final_code_hhq, show_na = F) |> 
-    adorn_totals(where = c("row", "col")) |> 
-    adorn_percentages("row") |> 
-    adorn_pct_formatting() |> 
-    adorn_ns(position = "front") |> 
-    gt() |> 
-    tab_spanner(
-        label = md("**HH Survey (Final Code)**"),
-        columns = c(starts_with("2"), "999", "Pending")
-    ) |> 
-    cols_label(
-        FIID = "FIID"
-    ) |> 
-    gt_theme_espn() |> 
-    opt_interactive(use_pagination = FALSE)
-toc()           # 0.27 sec elapsed
-
-
-# ** IND Survey Code by FIID ----------------------------------------------
-# Crosstab using gtsummary
-tic()
-data_ex_01 |> 
-    tbl_cross(
-        FIID, final_code_indq,
-        missing = "no", percent = "row"
-    ) |> 
-    bold_labels() |> 
-    as_gt()
-toc()           # 6.64 sec elapsed
-# Crosstab using tabyl and gt
-tic()
-data_ex_01 |> 
-    tabyl(FIID, final_code_indq, show_na = F) |> 
-    adorn_totals(where = c("row", "col")) |> 
-    adorn_percentages("row") |> 
-    adorn_pct_formatting() |> 
-    adorn_ns(position = "front") |> 
-    gt() |> 
-    tab_spanner(
-        label = md("**IND Survey (Final Code)**"),
-        columns = c(starts_with("4"), "Unopened", "Pending")
-    ) |> 
-    cols_label(
-        FIID = "FIID"
-    ) |> 
-    gt_theme_espn() |> 
-    opt_interactive(use_pagination = FALSE)
-toc()           # 0.26 sec elapsed
-
-
-
-#_====
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# C05 - P4 TEAM Statistics ------------------------------------------------
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Here we develop and test the Dashboard Cards and them implement it in the
-# Dashboard. For Dashboard we run and check which version Displays the best 
-# for each variable, like whether a variable should be displayed as a table,
-# a horizontal bar graph, vertical bar graph, etc. So we keep the code for
-# all possibilities here.
-# This section contains the Cards for Page 4 - TEAM Statistics.
-
-
-# ** Response Rate Table --------------------------------------------------
-# Transform the Data for calculating the Response Rate for Overall, 
-# Household and Individual Questionnaire.
-df_team_rrate <- data_ex_01 |> 
-    # Group by Team ID
-    group_by(team_id) |> 
-    # Calculate Count of HHs
-    summarize(
-        tot_hhq_n = sum(!is.na(rrate_hhq_01), na.rm = T),
-        tot_indq_n = sum(!is.na(rrate_indq_01), na.rm = T),
-        comp_hhq_hh_n = sum(rrate_hhq_01, na.rm = T),
-        comp_indq_hh_n = sum(rrate_indq_01, na.rm = T),
-        ref_rate_hh_n = sum(ref_rate_01, na.rm = T)
-    ) |> 
-    # Calculate Response Rate of HHs in %
-    mutate(
-        comp_hhq_hh_pct = comp_hhq_hh_n / tot_hhq_n,
-        comp_indq_hh_pct = comp_indq_hh_n / tot_indq_n,
-        comp_allq_hh_pct = comp_hhq_hh_pct * comp_indq_hh_pct,
-        ref_rate_hh_pct = ref_rate_hh_n / tot_indq_n
-    ) |> 
-    # Categorical status var of Response Rates
-    # Categorical var with scores as category
-    mutate(rrate_status = case_when(
-        comp_hhq_hh_pct >= 0.92 & comp_indq_hh_pct >= 0.98 & 
-            comp_allq_hh_pct >= 0.92 ~ 3,
-        comp_hhq_hh_pct < 0.92 & comp_indq_hh_pct < 0.98 &  
-            comp_allq_hh_pct < 0.92 ~ 1,
-        .default = 2
-    )) |> 
-    # Convert to factor
-    mutate(rrate_status = factor(
-        rrate_status,
-        levels = c(3, 2, 1),
-        labels = c("Good", "Poor", "Very Poor")
-    ))
-
-# Check table
-df_team_rrate |> select(-ends_with("_n"))
-# View as gt table
-df_team_rrate |> 
-    select(team_id, ref_rate_hh_pct, comp_hhq_hh_pct, comp_indq_hh_pct, 
-           comp_allq_hh_pct, rrate_status) |> 
-    # Convert data to gt object
-    gt(rownames_to_stub = TRUE) |> 
-    # Add a formal title
-    # tab_header(title = md("**Field Investigator Response Rates**")) |> 
-    # Add Column labels
-    cols_label(
-        team_id = "Team ID",
-        ref_rate_hh_pct = html("Person-level <br>Refusal Rate"),
-        comp_hhq_hh_pct = "HRR",
-        comp_indq_hh_pct = "IRR",
-        comp_allq_hh_pct = "TRR",
-        rrate_status = html("Interviewer <br>Performance")
-    ) |> 
-    # Add footnotes for the response rates
-    tab_footnote(
-        footnote = "Total Response Rate, Target >= 92%",
-        locations = cells_column_labels(comp_allq_hh_pct)
-    ) |> 
-    tab_footnote(
-        footnote = "Household Response Rate, Target >= 92%",
-        locations = cells_column_labels(comp_hhq_hh_pct)
-    ) |> 
-    tab_footnote(
-        footnote = "Individual Response Rate, Target >= 98%",
-        locations = cells_column_labels(comp_indq_hh_pct)
-    ) |> 
-    # Add % Symbol
-    fmt_percent(
-        columns = ends_with("_pct"),
-        decimals = 1
-    ) |> 
-    # Colour Code the Response Rate Status
-    data_color(
-        columns = rrate_status,
-        method = "factor",
-        palette = c("Good" = "green4", 
-                    "Poor" = "orange", 
-                    "Very Poor" = "red4")
-    ) |> 
-    # Add Theme to the gt table 
-    gt_theme_espn() |> 
-    # Make the table interactive    
-    opt_interactive(use_pagination = FALSE)
-
-
-# ** HH Survey Code by Team ID --------------------------------------------
-# Crosstab using gtsummary
-tic()
-data_ex_01 |> 
-    tbl_cross(
-        team_id, final_code_hhq,
-        missing = "no", percent = "row"
-    ) |> 
-    bold_labels() |> 
-    as_gt()
-toc()           # 3.28 sec elapsed
-# Crosstab using tabyl and gt
-tic()
-data_ex_01 |> 
-    tabyl(team_id, final_code_hhq, show_na = F) |> 
-    adorn_totals(where = c("row", "col")) |> 
-    adorn_percentages("row") |> 
-    adorn_pct_formatting() |> 
-    adorn_ns(position = "front") |> 
-    gt() |> 
-    tab_spanner(
-        label = md("**HH Survey (Final Code)**"),
-        columns = c(starts_with("2"), "999", "Pending")
-    ) |> 
-    cols_label(
-        team_id = "Team ID"
-    ) |> 
-    gt_theme_espn() |> 
-    opt_interactive(use_pagination = FALSE)
-toc()           # 0.26 sec elapsed
-
-
-# ** IND Survey Code by FIID ----------------------------------------------
-# Crosstab using gtsummary
-tic()
-data_ex_01 |> 
-    tbl_cross(
-        team_id, final_code_indq,
-        missing = "no", percent = "row"
-    ) |> 
-    bold_labels() |> 
-    as_gt()
-toc()           # 3.16 sec elapsed
-# Crosstab using tabyl and gt
-tic()
-data_ex_01 |> 
-    tabyl(team_id, final_code_indq, show_na = F) |> 
-    adorn_totals(where = c("row", "col")) |> 
-    adorn_percentages("row") |> 
-    adorn_pct_formatting() |> 
-    adorn_ns(position = "front") |> 
-    gt() |> 
-    tab_spanner(
-        label = md("**IND Survey (Final Code)**"),
-        columns = c(starts_with("4"), "Unopened", "Pending")
-    ) |> 
-    cols_label(
-        team_id = "Team ID"
-    ) |> 
-    gt_theme_espn() |> 
-    opt_interactive(use_pagination = FALSE)
-toc()           # 0.2 sec elapsed
-
-
-
-#_====
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# C07 - DATA TABLE --------------------------------------------------------
+# C07 - P7 DATA TABLE -----------------------------------------------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # View as gt table
 tic()
 data_ex_01 |> 
-    select(DATA01, DATA04, DATA02, FIID, CASEID, DATA11, 
-           HHCurrentEvent, IQCurrentEvent) |> 
+    select(
+        DATA01, DATA04, DATA05, DATA02, DATA06, DATA11, 
+        CASEID, FIID, 
+        HHCurrentEvent, HHCurrentEventDate, IQCurrentEvent, IQCurrentEventDate,
+        HHEvent02, HHEventDate02, IQEvent02, IQEventDate02, 
+        HHEvent03, HHEventDate03, IQEvent03, IQEventDate03, 
+        HHEvent04, HHEventDate04, IQEvent04, IQEventDate04, 
+        HHEvent05, HHEventDate05, IQEvent05, IQEventDate05
+    ) |> 
     # Convert data to gt object
     gt(rownames_to_stub = TRUE) |> 
     # Add stubheader label
@@ -1461,12 +1687,32 @@ data_ex_01 |>
     cols_label(
         DATA01 = "State Code",
         DATA04 = "District Name",
+        DATA05 = "Sub-district Name",
         DATA02 = "PSU Code",
-        FIID = "Field Investigator ID",
-        CASEID = "Respondent ID",
+        DATA06 = "PSU Name",
         DATA11 = "Household Structure Num",
-        HHCurrentEvent = "Current HH Survey Code",
-        IQCurrentEvent = "Current IND Survey Code",
+        CASEID = "Case ID",
+        FIID = "Field Investigator ID",
+        HHCurrentEvent = "Final HH Survey Code",
+        HHCurrentEventDate = "Final HH Survey Date-time",
+        IQCurrentEvent = "Final IND Survey Code",
+        IQCurrentEventDate = "Final IND Survey Date-time",
+        HHEvent02 = "Last Attempt 1 HH Survey Code",
+        HHEventDate02 = "Last Attempt 1 HH Survey Date-time",
+        IQEvent02 = "Last Attempt 1 IND Survey Code",
+        IQEventDate02 = "Last Attempt 1 IND Survey Date-time",
+        HHEvent03 = "Last Attempt 2 HH Survey Code",
+        HHEventDate03 = "Last Attempt 2 HH Survey Date-time",
+        IQEvent03 = "Last Attempt 2 IND Survey Code",
+        IQEventDate03 = "Last Attempt 2 IND Survey Date-time",
+        HHEvent04 = "Last Attempt 3 HH Survey Code",
+        HHEventDate04 = "Last Attempt 3 HH Survey Date-time",
+        IQEvent04 = "Last Attempt 3 IND Survey Code",
+        IQEventDate04 = "Last Attempt 3 IND Survey Date-time",
+        HHEvent05 = "Last Attempt 4 HH Survey Code",
+        HHEventDate05 = "Last Attempt 4 HH Survey Date-time",
+        IQEvent05 = "Last Attempt 4 IND Survey Code",
+        IQEventDate05 = "Last Attempt 4 IND Survey Date-time"
     ) |> 
     # Add Theme to the gt table 
     gt_theme_espn() |> 
@@ -1474,7 +1720,9 @@ data_ex_01 |>
     opt_interactive(
         use_pagination = TRUE,
         use_page_size_select = TRUE,
-        use_filters = TRUE
+        use_search = FALSE,
+        use_filters = TRUE,
+        page_size_default = 25
     )
 toc()           # 38.57 sec elapsed
 
